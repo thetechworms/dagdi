@@ -4,6 +4,8 @@
 .claude/settings.local.json
 .claude/*
 .claude
+.me
+.me/*
 
 # Project-local runtime config
 config/dagdi-*.yaml
