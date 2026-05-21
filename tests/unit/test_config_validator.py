@@ -987,3 +987,84 @@ class TestValidateConfiguration:
         result = validate_configuration(config)
         server = result.products[0].environments[0].servers[0]
         assert server.ssh_config.port == 5555
+
+    def test_validate_global_settings_log_buffer_size(self):
+        """Should validate global settings log_buffer_size."""
+        config = {
+            "products": [
+                {
+                    "name": "app",
+                    "environments": [
+                        {
+                            "name": "dev",
+                            "servers": [
+                                {
+                                    "name": "web-1",
+                                    "type": "ubuntu",
+                                    "ips": ["10.0.1.10"],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "global_settings": {"log_buffer_size": 10000},
+        }
+
+        result = validate_configuration(config)
+        assert result.global_settings.log_buffer_size == 10000
+
+    def test_validate_global_settings_log_buffer_size_invalid(self):
+        """Should reject non-integer log_buffer_size."""
+        config = {
+            "products": [
+                {
+                    "name": "app",
+                    "environments": [
+                        {
+                            "name": "dev",
+                            "servers": [
+                                {
+                                    "name": "web-1",
+                                    "type": "ubuntu",
+                                    "ips": ["10.0.1.10"],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "global_settings": {"log_buffer_size": "big"},
+        }
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_configuration(config)
+        assert "log_buffer_size" in str(exc_info.value)
+
+    def test_validate_global_settings_log_buffer_size_out_of_range(self):
+        """Should reject log_buffer_size outside 100-100000."""
+        for value in [50, 200000]:
+            config = {
+                "products": [
+                    {
+                        "name": "app",
+                        "environments": [
+                            {
+                                "name": "dev",
+                                "servers": [
+                                    {
+                                        "name": "web-1",
+                                        "type": "ubuntu",
+                                        "ips": ["10.0.1.10"],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+                "global_settings": {"log_buffer_size": value},
+            }
+
+            with pytest.raises(ValidationError) as exc_info:
+                validate_configuration(config)
+            assert "log_buffer_size" in str(exc_info.value)

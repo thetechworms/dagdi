@@ -30,7 +30,7 @@ app.add_typer(service_app, name="manage", help="Manage services")
 app.command(name="ms", help="Manage single service")(manage_single_service)
 app.command(name="mss", help="Manage multiple services")(manage_multiple_services)
 app.command(name="mas", help="Manage all services")(manage_all_services)
-app.command(name="logs", help="Stream service logs")(logs)
+app.command(name="logs", help="Stream logs from one or more services")(logs)
 app.command(name="ssh", help="SSH into a server")(ssh_command)
 app.add_typer(context_app, name="context", help="Manage context")
 app.add_typer(config_app, name="config", help="Manage configuration")
@@ -66,6 +66,7 @@ def main(
         dagdi top                          # Show server metrics
         dagdi manage service nginx status  # Check service status
         dagdi logs nginx                   # Stream service logs
+        dagdi logs nginx api               # Stream multiple service logs
         dagdi ssh                          # SSH into a server
     
     For more information, visit: https://github.com/thetechworms/dagdi
