@@ -72,6 +72,7 @@ class GlobalSettings:
     on_partial_failure: Literal["continue", "stop", "prompt"] = "prompt"
     live_status_table: bool = False
     theme: str = "default"
+    log_buffer_size: int = 5000
 
 
 @dataclass

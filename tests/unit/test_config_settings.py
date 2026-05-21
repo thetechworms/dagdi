@@ -44,3 +44,4 @@ class TestShowSettings:
         assert "SSH Port: 22" in result.stdout
         assert "On Partial Failure: prompt" in result.stdout
         assert "Live Status Table: False" in result.stdout
+        assert "Log Buffer Size: 5000" in result.stdout

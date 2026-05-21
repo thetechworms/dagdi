@@ -93,6 +93,19 @@ def validate_configuration(config_dict: Dict[str, Any]) -> Configuration:
                     )
                 global_settings.theme = value
 
+            if "log_buffer_size" in gs_dict:
+                try:
+                    value = int(gs_dict["log_buffer_size"])
+                except (ValueError, TypeError):
+                    raise ValidationError(
+                        "'global_settings.log_buffer_size' must be an integer"
+                    )
+                if value < 100 or value > 100000:
+                    raise ValidationError(
+                        "'global_settings.log_buffer_size' must be between 100 and 100000"
+                    )
+                global_settings.log_buffer_size = value
+
     # Validate global services (if present)
     global_services = []
     if "services" in config_dict:
