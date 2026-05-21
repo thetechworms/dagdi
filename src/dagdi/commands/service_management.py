@@ -16,7 +16,12 @@ from dagdi.config.resolver import resolve_services
 from dagdi.context.manager import get_context
 from dagdi.output.formatter import Formatter, format_status_indicator
 from dagdi.resolver import resolve_scope, get_target_ips
-from dagdi.ssh.executor import execute_command, prepare_sudo_auth, warm_up_connection
+from dagdi.ssh.executor import (
+    execute_command,
+    prepare_sudo_auth,
+    validate_sudo_auth,
+    warm_up_connection,
+)
 from dagdi.ssh.command_builder import CommandBuilder
 from dagdi.models import ExecutionResult, Service
 
@@ -36,11 +41,14 @@ def _preflight_monitor_auth(target_ips: List[tuple]) -> None:
 
     Interactive prompts (SSH password, sudo password) conflict with Rich Live
     rendering, so all credential resolution must happen before live.start().
+
+    Raises on authentication failure so the caller can abort before rendering.
     """
     for server_obj, server_ip in target_ips:
         warm_up_connection(server_obj, server_ip)
         if server_obj.ssh_config.sudo:
             prepare_sudo_auth(server_obj, server_ip)
+            validate_sudo_auth(server_obj, server_ip)
 
 
 def _result_key(result: dict) -> str:
@@ -159,6 +167,12 @@ def _execute_service_target(
             )
 
         result = execute_command(server_obj, server_ip, cmd, timeout=timeout)
+
+        if result.error:
+            return None, _build_service_failure(
+                server_obj, server_ip, result.error, service_obj=service_obj,
+            )
+
         output = _build_service_result(server_obj, server_ip, service_obj, action, result)
 
         if action != "status" and not result.success:

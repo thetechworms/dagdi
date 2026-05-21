@@ -117,14 +117,14 @@ def _resolve_sudo_password(server: Server, ip: str, prompt_if_needed: bool = Tru
 
 
 def warm_up_connection(server: Server, ip: str) -> None:
-    """Pre-establish an SSH connection so interactive auth happens before live displays."""
+    """Pre-establish an SSH connection so interactive auth happens before live displays.
+
+    Raises on authentication or connection failure so callers can abort early.
+    """
     if _is_local_target(ip):
         return
-    try:
-        pool = get_connection_pool()
-        pool.get(server.name, ip, server.ssh_config)
-    except Exception:
-        pass
+    pool = get_connection_pool()
+    pool.get(server.name, ip, server.ssh_config)
 
 
 def prepare_sudo_auth(server: Server, ip: str, prompt_if_needed: bool = True) -> bool:
@@ -149,6 +149,42 @@ def prepare_sudo_auth(server: Server, ip: str, prompt_if_needed: bool = True) ->
         return True
 
     return bool(_resolve_sudo_password(server, ip, prompt_if_needed=prompt_if_needed))
+
+
+def validate_sudo_auth(server: Server, ip: str) -> None:
+    """Validate that the cached sudo password actually works.
+
+    Raises ExecutionError if the password is incorrect.
+    Must be called after prepare_sudo_auth() has resolved the password.
+    """
+    if not server.ssh_config.sudo:
+        return
+
+    ssh_username = (server.ssh_config.username or "").strip().lower()
+    if ssh_username == "root":
+        return
+
+    sudo_nopasswd = server.ssh_config.sudo_nopasswd
+    if sudo_nopasswd is None:
+        sudo_nopasswd = _can_run_sudo_without_password(server, ip)
+    if sudo_nopasswd:
+        return
+
+    sudo_password = _resolve_sudo_password(server, ip, prompt_if_needed=False)
+    if not sudo_password:
+        return
+
+    result = execute_command(server, ip, "sudo true", timeout=server.ssh_config.timeout)
+    if result.error:
+        raise ExecutionError(result.error)
+    if result.return_code != 0:
+        label = _sudo_password_prompt_label(server)
+        cache_key = _sudo_password_cache_key(server, ip)
+        with _SUDO_PASSWORD_CACHE_LOCK:
+            _SUDO_PASSWORD_CACHE.pop(cache_key, None)
+        raise ExecutionError(
+            f"Sudo authentication failed for {label}: incorrect password"
+        )
 
 
 def _normalize_sudo_command(server: Server, ip: str, command: str) -> str:
