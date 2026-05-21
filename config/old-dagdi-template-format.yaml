@@ -1,0 +1,171 @@
+# Dagdi Configuration Template - OLD FORMAT (Nested Services)
+# 
+# This template shows the OLD FORMAT where services are defined inline with servers.
+# Use this format if:
+# - You have a small number of services
+# - Services are not repeated across environments
+# - You prefer simplicity over DRY principles
+#
+# Structure: products > environments > servers > services (nested)
+
+products:
+  - name: myapp
+    # Product name - used to identify your application/infrastructure
+    
+    environments:
+      - name: development
+        # Environment name - e.g., dev, staging, prod
+        
+        servers:
+          - name: web-server-1
+            # Server name - unique identifier for this server
+            
+            type: ubuntu
+            # OS type - ubuntu, centos, debian, etc.
+            
+            ips:
+              - 10.0.1.10
+              # IP address(es) for this server
+              # Can be hostname or IP
+            
+            ssh:
+              # SSH connection configuration
+              username: ubuntu
+              key_path: ~/.ssh/id_rsa
+              # port: 2222              # Optional: SSH port (overrides global ssh_port)
+              timeout: 30
+              sudo: true
+              # sudo_password: "prompt"    # Optional: prompt once instead of storing plain text
+              # sudo_password: "password"  # Optional: literal sudo password
+              # sudo_nopasswd: true        # Optional, for passwordless sudo
+
+            services:
+              # Services running on this server (NESTED - defined inline)
+
+              - name: nginx
+                type: docker
+                # Service type: docker or systemd
+                
+                friendly_name: Web Server
+                # Human-readable name for display
+                
+                config:
+                  # Service-specific configuration
+                  container_name: nginx
+              
+              - name: postgresql
+                type: docker
+                friendly_name: PostgreSQL Database
+                port: 5432
+                # Port number for the service
+                
+                config:
+                  container_name: postgresql
+              
+              - name: syslog
+                type: systemd
+                friendly_name: System Log
+                config:
+                  log_path: /var/log/syslog
+                  log_command: tail -f /var/log/syslog
+          
+          - name: db-server-1
+            type: ubuntu
+            ips:
+              - 10.0.1.20
+            ssh:
+              username: ubuntu
+              key_path: ~/.ssh/id_rsa
+              timeout: 30
+              sudo: true
+            
+            services:
+              # Note: postgresql is defined again here (duplication!)
+              - name: postgresql
+                type: docker
+                friendly_name: PostgreSQL Database
+                port: 5432
+                config:
+                  container_name: postgresql
+              
+              - name: redis
+                type: docker
+                friendly_name: Redis Cache
+                port: 6379
+                config:
+                  container_name: redis
+      
+      - name: production
+        # Another environment - services are repeated here too
+        
+        servers:
+          - name: web-server-1
+            type: ubuntu
+            ips:
+              - 10.0.2.10
+            ssh:
+              username: ubuntu
+              key_path: ~/.ssh/id_rsa
+              timeout: 30
+              sudo: true
+            
+            services:
+              # nginx defined again (duplication!)
+              - name: nginx
+                type: docker
+                friendly_name: Web Server
+                config:
+                  container_name: nginx
+              
+              - name: postgresql
+                type: docker
+                friendly_name: PostgreSQL Database
+                port: 5432
+                config:
+                  container_name: postgresql
+          
+          - name: db-server-1
+            type: ubuntu
+            ips:
+              - 10.0.2.20
+            ssh:
+              username: ubuntu
+              key_path: ~/.ssh/id_rsa
+              timeout: 30
+              sudo: true
+            
+            services:
+              # postgresql and redis defined again (duplication!)
+              - name: postgresql
+                type: docker
+                friendly_name: PostgreSQL Database
+                port: 5432
+                config:
+                  container_name: postgresql
+              
+              - name: redis
+                type: docker
+                friendly_name: Redis Cache
+                port: 6379
+                config:
+                  container_name: redis
+
+global_settings:
+  # Global settings applied to all commands
+  ssh_timeout: 30
+  # SSH timeout in seconds
+
+  ssh_port: 22
+  # Default SSH port for all servers (override per server or per environment)
+
+  on_partial_failure: prompt
+  # Behavior on partial failure: continue, stop, or prompt
+
+  live_status_table: true
+  # Show live updating status table in monitoring commands
+
+# NOTES:
+# - Services are defined inline with each server
+# - Same service (e.g., nginx) is repeated in multiple places
+# - If you need to update nginx config, you must update it everywhere
+# - This format is simple but not DRY (Don't Repeat Yourself)

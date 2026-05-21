@@ -1,0 +1,50 @@
+products:
+  - name: sample-app
+    environments:
+      - name: dev
+        servers:
+          - name: app-server-1
+            type: ubuntu
+            ips:
+              - 192.168.1.10
+              - 192.168.1.11
+            ssh:
+              username: ubuntu
+              key_path: ~/.ssh/id_rsa
+              timeout: 30
+              sudo: true
+              sudo_nopasswd: false
+            services:
+              - name: nginx
+                friendly_name: Web Server
+                type: docker
+                config:
+                  container_name: nginx
+              - name: redis
+                friendly_name: Redis Cache
+                type: docker
+                port: 6379
+                config:
+                  container_name: redis
+              - name: grafana
+                friendly_name: Grafana Dashboard
+                type: docker
+                api_endpoint: http://localhost:3000/api/health
+                port: 3000
+                config:
+                  container_name: grafana
+              - name: syslog
+                friendly_name: System Log
+                type: systemd
+                config:
+                  log_path: /var/log/syslog
+                  log_command: tail -f /var/log/syslog
+              - name: cron
+                friendly_name: Cron Scheduler
+                type: systemd
+
+global_settings:
+  ssh_timeout: 30
+  ssh_port: 22
+  on_partial_failure: prompt
+  live_status_table: true

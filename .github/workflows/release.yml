@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            binary: dagdi
+          - os: windows-latest
+            target: windows-amd64
+            binary: dagdi.exe
+          - os: macos-latest
+            target: macos-arm64
+            binary: dagdi
+
+    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.target }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Build binary
+        run: pyinstaller dagdi.spec --clean
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mv "dist/${{ matrix.binary }}" "dist/dagdi-${VERSION}-${{ matrix.target }}${{ matrix.target == 'windows-amd64' && '.exe' || '' }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dagdi-${{ matrix.target }}
+          path: dist/dagdi-*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Create Release
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: |
+          sha256sum dagdi-* > checksums-sha256.txt
+          cat checksums-sha256.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: dagdi-${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/dagdi-*
+            artifacts/checksums-sha256.txt

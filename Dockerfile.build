@@ -1,0 +1,15 @@
+FROM python:3.10-slim-bullseye
+
+RUN apt-get update && apt-get install -y --no-install-recommends binutils && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY pyproject.toml entry.py dagdi.spec ./
+COPY src/ src/
+
+RUN pip install --no-cache-dir -e ".[dev]" && \
+    pyinstaller dagdi.spec --clean
+
+FROM scratch
+COPY --from=0 /build/dist/dagdi /dagdi

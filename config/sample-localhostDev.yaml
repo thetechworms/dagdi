@@ -1,0 +1,35 @@
+products:
+  - name: localhost
+    environments:
+      - name: dev
+        servers:
+          - name: localhost
+            type: centos
+            ips:
+              - localhost
+            ssh:
+              username: 
+              key_path: 
+              timeout: 30
+              sudo: true
+              sudo_nopasswd: false
+            services:
+              - name: syslog
+                friendly_name: System Log
+                type: systemd
+                config:
+                  log_path: /var/log/syslog
+                  log_command: tail -f /var/log/syslog
+              - name: cups
+                friendly_name: Printing Service
+                type: systemd
+              - name: sshd
+                friendly_name: SSH Service
+                type: systemd
+              
+
+global_settings:
+  ssh_timeout: 30
+  ssh_port: 22
+  on_partial_failure: prompt
+  live_status_table: true
