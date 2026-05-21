@@ -14,6 +14,7 @@ from dagdi.config.merger import merge_configurations
 from dagdi.config.validator import validate_configuration
 from dagdi.config.resolver import resolve_services
 from dagdi.context.manager import get_context
+from dagdi.interactive import select_service, select_services, select_action
 from dagdi.output.formatter import Formatter, format_status_indicator
 from dagdi.output.themes import get_theme, styled
 from dagdi.resolver import resolve_scope, get_target_ips
@@ -547,8 +548,8 @@ def _parse_service_status(result: ExecutionResult, service_type: str) -> str:
 
 @service_app.command()
 def service(
-    name: str = typer.Argument(..., help="Service name"),
-    action: str = typer.Argument(..., help="Action: status, start, stop, restart"),
+    name: Optional[str] = typer.Argument(None, help="Service name (interactive if omitted)"),
+    action: Optional[str] = typer.Argument(None, help="Action: status, start, stop, restart"),
     product: Optional[str] = typer.Option(
         None, "-p", "--product", help="Product name"
     ),
@@ -571,7 +572,10 @@ def service(
 ) -> None:
     """Manage services: status, start, stop, restart.
 
+    Run without arguments for interactive service and action selection.
+
     Examples:
+        dagdi manage service                           # Interactive mode
         dagdi manage service nginx status              # Check status
         dagdi manage service nginx start               # Start service
         dagdi manage service nginx stop                # Stop service
@@ -579,6 +583,30 @@ def service(
         dagdi manage service nginx start --server web-1  # On specific server
         dagdi manage service nginx stop --ip 10.0.1.10   # On specific IP
     """
+    if name is None or action is None:
+        try:
+            config = _load_config()
+        except Exception as e:
+            typer.echo(f"Error: {str(e)}", err=True)
+            raise typer.Exit(1)
+
+        if name is None:
+            available, _ = _collect_scope_services(
+                config, product=product, environment=environment, server=server, ip=ip,
+            )
+            if not available:
+                typer.echo("No services found in the current scope.", err=True)
+                raise typer.Exit(1)
+            svc = select_service(available)
+            if svc is None:
+                raise typer.Exit(0)
+            name = svc.name
+
+        if action is None:
+            action = select_action()
+            if action is None:
+                raise typer.Exit(0)
+
     _execute_service_action(
         name=name,
         action=action,
@@ -598,6 +626,32 @@ def _load_config():
     merged_config = merge_configurations(yaml_configs)
     config = validate_configuration(merged_config)
     return resolve_services(config)
+
+
+def _collect_scope_services(
+    config,
+    product: Optional[str] = None,
+    environment: Optional[str] = None,
+    server: Optional[str] = None,
+    ip: Optional[str] = None,
+) -> Tuple[List[Service], Any]:
+    """Load context, resolve scope, and return deduplicated services + scope."""
+    current_context = get_context()
+    scope = resolve_scope(
+        config=config,
+        product=product or (current_context.get("product") if current_context else None),
+        environment=environment or (current_context.get("environment") if current_context else None),
+        server=server,
+        ip=ip,
+    )
+    seen: set = set()
+    services: List[Service] = []
+    for srv in scope.servers:
+        for svc in srv.services:
+            if svc.name not in seen:
+                seen.add(svc.name)
+                services.append(svc)
+    return services, scope
 
 
 def _execute_service_action(
@@ -908,8 +962,8 @@ def _display_consolidated_action(results: List[dict], action: str) -> None:
 
 
 def manage_single_service(
-    service_name: str = typer.Argument(..., help="Service name"),
-    action: str = typer.Argument(..., help="Action: status, start, stop, restart"),
+    service_name: Optional[str] = typer.Argument(None, help="Service name (interactive if omitted)"),
+    action: Optional[str] = typer.Argument(None, help="Action: status, start, stop, restart"),
     product: Optional[str] = typer.Option(
         None, "-p", "--product", help="Product name"
     ),
@@ -931,16 +985,40 @@ def manage_single_service(
     ),
 ) -> None:
     """Shortcut for managing a single service.
-    
-    Equivalent to: dagdi manage service <name> <action>
-    
+
+    Run without arguments for interactive service and action selection.
+
     Examples:
+        dagdi ms                  # Interactive mode
         dagdi ms nginx status
         dagdi ms nginx start
         dagdi ms nginx stop
         dagdi ms nginx restart
     """
-    # Delegate to the internal function
+    if service_name is None or action is None:
+        try:
+            config = _load_config()
+        except Exception as e:
+            typer.echo(f"Error: {str(e)}", err=True)
+            raise typer.Exit(1)
+
+        if service_name is None:
+            available, _ = _collect_scope_services(
+                config, product=product, environment=environment, server=server, ip=ip,
+            )
+            if not available:
+                typer.echo("No services found in the current scope.", err=True)
+                raise typer.Exit(1)
+            svc = select_service(available)
+            if svc is None:
+                raise typer.Exit(0)
+            service_name = svc.name
+
+        if action is None:
+            action = select_action()
+            if action is None:
+                raise typer.Exit(0)
+
     _execute_service_action(
         name=service_name,
         action=action,
@@ -955,7 +1033,9 @@ def manage_single_service(
 
 
 def manage_multiple_services(
-    services_and_action: List[str] = typer.Argument(..., help="Service names followed by action"),
+    services_and_action: Optional[List[str]] = typer.Argument(
+        None, help="Service names followed by action (interactive if omitted)"
+    ),
     product: Optional[str] = typer.Option(
         None, "-p", "--product", help="Product name"
     ),
@@ -977,21 +1057,46 @@ def manage_multiple_services(
     ),
 ) -> None:
     """Shortcut for managing multiple services.
-    
+
     The last argument is the action, all preceding arguments are service names.
-    
+    Run without arguments for interactive multi-service selection.
+
     Examples:
+        dagdi mss                             # Interactive mode
         dagdi mss nginx api postgres restart
         dagdi mss nginx api stop
         dagdi mss nginx postgres start
     """
-    if len(services_and_action) < 2:
-        typer.echo("Error: Must provide at least one service name and an action", err=True)
+    # Load config (needed for both interactive and non-interactive paths)
+    try:
+        config = _load_config()
+    except Exception as e:
+        typer.echo(f"Error: {str(e)}", err=True)
         raise typer.Exit(1)
-    
-    # Last argument is the action
-    action = services_and_action[-1]
-    service_names = services_and_action[:-1]
+
+    if not services_and_action:
+        available, _ = _collect_scope_services(
+            config, product=product, environment=environment, server=server, ip=ip,
+        )
+        if not available:
+            typer.echo("No services found in the current scope.", err=True)
+            raise typer.Exit(1)
+
+        selected = select_services(available)
+        if not selected:
+            raise typer.Exit(0)
+        service_names = [svc.name for svc in selected]
+
+        action = select_action()
+        if action is None:
+            raise typer.Exit(0)
+    else:
+        if len(services_and_action) < 2:
+            typer.echo("Error: Must provide at least one service name and an action", err=True)
+            raise typer.Exit(1)
+
+        action = services_and_action[-1]
+        service_names = services_and_action[:-1]
 
     if monitor and action != "status":
         typer.echo("Error: --monitor can only be used with the 'status' action", err=True)
@@ -999,8 +1104,7 @@ def manage_multiple_services(
     if monitor and len(service_names) > 1:
         typer.echo("Error: --monitor with mss supports one service at a time", err=True)
         raise typer.Exit(1)
-    
-    # Validate action
+
     valid_actions = ["status", "start", "stop", "restart"]
     if action not in valid_actions:
         typer.echo(
@@ -1008,11 +1112,7 @@ def manage_multiple_services(
             err=True
         )
         raise typer.Exit(1)
-    
-    # Load config once for all services
-    config = _load_config()
 
-    # Execute action for each service
     for service_name in service_names:
         typer.echo(f"\n{'='*60}")
         typer.echo(f"Managing service: {service_name}")
@@ -1033,7 +1133,7 @@ def manage_multiple_services(
 
 
 def manage_all_services(
-    action: str = typer.Argument(..., help="Action: status, start, stop, restart"),
+    action: Optional[str] = typer.Argument(None, help="Action: status, start, stop, restart"),
     product: Optional[str] = typer.Option(
         None, "-p", "--product", help="Product name"
     ),
@@ -1055,13 +1155,20 @@ def manage_all_services(
     ),
 ) -> None:
     """Shortcut for managing all services in an environment.
-    
+
+    Run without arguments for interactive action selection.
+
     Examples:
+        dagdi mas               # Interactive action selection
         dagdi mas status
         dagdi mas start
         dagdi mas stop
         dagdi mas restart
     """
+    if action is None:
+        action = select_action()
+        if action is None:
+            raise typer.Exit(0)
     try:
         # Validate action
         valid_actions = ["status", "start", "stop", "restart"]
