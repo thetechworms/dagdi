@@ -21,6 +21,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+interactive = [
+    "InquirerPy>=0.3.4",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
