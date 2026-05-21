@@ -12,7 +12,6 @@ from dagdi.config.resolver import resolve_services
 from dagdi.context.manager import get_context
 from dagdi.output.formatter import highlight_log_line
 from dagdi.resolver import resolve_scope, get_target_ips
-from dagdi.ssh.executor import execute_command_stream
 
 
 class _HighlightingWriter:
@@ -161,6 +160,8 @@ def logs(
         log_console = Console(file=original_stdout, highlight=False)
         sys.stdout = _HighlightingWriter(log_console)  # type: ignore[assignment]
         try:
+            from dagdi.ssh.executor import execute_command_stream
+
             execute_command_stream(server_obj, server_ip, cmd, timeout=timeout)
         except KeyboardInterrupt:
             pass

@@ -106,7 +106,7 @@ class TestBuildLogCommand:
 class TestLogsCommand:
     """Tests for logs command."""
     
-    @patch('src.dagdi.commands.logs.execute_command_stream')
+    @patch('dagdi.ssh.executor.execute_command_stream')
     @patch('src.dagdi.commands.logs.get_context')
     @patch('src.dagdi.commands.logs.validate_configuration')
     @patch('src.dagdi.commands.logs.merge_configurations')
@@ -180,7 +180,7 @@ class TestLogsCommand:
         output = result.stdout + result.stderr
         assert "not found" in output.lower()
     
-    @patch('src.dagdi.commands.logs.execute_command_stream')
+    @patch('dagdi.ssh.executor.execute_command_stream')
     @patch('src.dagdi.commands.logs.get_context')
     @patch('src.dagdi.commands.logs.validate_configuration')
     @patch('src.dagdi.commands.logs.merge_configurations')
@@ -227,7 +227,7 @@ class TestLogsCommand:
         call_args = mock_stream.call_args
         assert call_args[0][0].name == "web-1"
     
-    @patch('src.dagdi.commands.logs.execute_command_stream')
+    @patch('dagdi.ssh.executor.execute_command_stream')
     @patch('src.dagdi.commands.logs.get_context')
     @patch('src.dagdi.commands.logs.validate_configuration')
     @patch('src.dagdi.commands.logs.merge_configurations')
@@ -274,7 +274,7 @@ class TestLogsCommand:
         call_args = mock_stream.call_args
         assert call_args[0][1] == "10.0.1.11"
 
-    @patch('src.dagdi.commands.logs.execute_command_stream')
+    @patch('dagdi.ssh.executor.execute_command_stream')
     @patch('src.dagdi.commands.logs.get_context')
     @patch('src.dagdi.commands.logs.validate_configuration')
     @patch('src.dagdi.commands.logs.merge_configurations')
@@ -316,7 +316,7 @@ class TestLogsCommand:
         call_args = mock_stream.call_args
         assert call_args[0][2] == "sudo journalctl -u nginx -f"
 
-    @patch('src.dagdi.commands.logs.execute_command_stream')
+    @patch('dagdi.ssh.executor.execute_command_stream')
     @patch('src.dagdi.commands.logs.get_context')
     @patch('src.dagdi.commands.logs.validate_configuration')
     @patch('src.dagdi.commands.logs.merge_configurations')

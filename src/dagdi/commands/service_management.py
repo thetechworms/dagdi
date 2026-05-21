@@ -17,12 +17,6 @@ from dagdi.context.manager import get_context
 from dagdi.output.formatter import Formatter, format_status_indicator
 from dagdi.output.themes import get_theme, styled
 from dagdi.resolver import resolve_scope, get_target_ips
-from dagdi.ssh.executor import (
-    execute_command,
-    prepare_sudo_auth,
-    validate_sudo_auth,
-    warm_up_connection,
-)
 from dagdi.ssh.command_builder import CommandBuilder
 from dagdi.models import ExecutionResult, Service
 
@@ -45,6 +39,8 @@ def _preflight_monitor_auth(target_ips: List[tuple]) -> None:
 
     Raises on authentication failure so the caller can abort before rendering.
     """
+    from dagdi.ssh.executor import warm_up_connection, prepare_sudo_auth, validate_sudo_auth
+
     for server_obj, server_ip in target_ips:
         warm_up_connection(server_obj, server_ip)
         if server_obj.ssh_config.sudo:
@@ -145,6 +141,8 @@ def _execute_service_target(
         )
 
     try:
+        from dagdi.ssh.executor import execute_command
+
         if action == "status":
             cmd = _build_status_command_with_metrics(
                 service_obj,
