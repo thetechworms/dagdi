@@ -20,7 +20,6 @@ from dagdi.context.manager import get_context
 from dagdi.output.formatter import Formatter, colorize_metric
 from dagdi.output.themes import get_theme, styled
 from dagdi.resolver import resolve_scope
-from dagdi.ssh.metrics_collector import MetricsCollector
 
 monitoring_app = typer.Typer(help="Monitoring commands")
 
@@ -111,6 +110,8 @@ def _collect_metrics_for_targets(
     show_progress: bool = False,
 ) -> tuple[List[dict], List[dict]]:
     """Collect metrics from all target servers."""
+    from dagdi.ssh.metrics_collector import MetricsCollector
+
     collector = MetricsCollector()
     results: List[dict] = []
     failures: List[dict] = []

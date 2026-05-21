@@ -17,12 +17,6 @@ from dagdi.context.manager import get_context
 from dagdi.output.formatter import Formatter, format_status_indicator
 from dagdi.output.themes import get_theme, styled
 from dagdi.resolver import resolve_scope, get_target_ips
-from dagdi.ssh.executor import (
-    execute_command,
-    prepare_sudo_auth,
-    validate_sudo_auth,
-    warm_up_connection,
-)
 from dagdi.ssh.command_builder import CommandBuilder
 from dagdi.models import ExecutionResult, Service
 
@@ -45,6 +39,8 @@ def _preflight_monitor_auth(target_ips: List[tuple]) -> None:
 
     Raises on authentication failure so the caller can abort before rendering.
     """
+    from dagdi.ssh.executor import warm_up_connection, prepare_sudo_auth, validate_sudo_auth
+
     for server_obj, server_ip in target_ips:
         warm_up_connection(server_obj, server_ip)
         if server_obj.ssh_config.sudo:
@@ -145,6 +141,8 @@ def _execute_service_target(
         )
 
     try:
+        from dagdi.ssh.executor import execute_command
+
         if action == "status":
             cmd = _build_status_command_with_metrics(
                 service_obj,
@@ -594,6 +592,14 @@ def service(
     )
 
 
+def _load_config():
+    """Load, merge, validate, and resolve the full configuration pipeline."""
+    yaml_configs = load_all_configurations()
+    merged_config = merge_configurations(yaml_configs)
+    config = validate_configuration(merged_config)
+    return resolve_services(config)
+
+
 def _execute_service_action(
     name: str,
     action: str,
@@ -604,6 +610,7 @@ def _execute_service_action(
     timeout: Optional[int] = None,
     monitor: bool = False,
     on_failure: Optional[str] = None,
+    config=None,
 ) -> None:
     """Internal function to execute service actions."""
     try:
@@ -620,11 +627,9 @@ def _execute_service_action(
             typer.echo("Error: --monitor can only be used with the 'status' action", err=True)
             raise typer.Exit(1)
 
-        # Load configuration
-        yaml_configs = load_all_configurations()
-        merged_config = merge_configurations(yaml_configs)
-        config = validate_configuration(merged_config)
-        config = resolve_services(config)
+        # Load configuration (skip if pre-loaded)
+        if config is None:
+            config = _load_config()
 
         # Load context
         current_context = get_context()
@@ -1004,12 +1009,15 @@ def manage_multiple_services(
         )
         raise typer.Exit(1)
     
+    # Load config once for all services
+    config = _load_config()
+
     # Execute action for each service
     for service_name in service_names:
         typer.echo(f"\n{'='*60}")
         typer.echo(f"Managing service: {service_name}")
         typer.echo(f"{'='*60}")
-        
+
         _execute_service_action(
             name=service_name,
             action=action,
@@ -1020,6 +1028,7 @@ def manage_multiple_services(
             timeout=timeout,
             monitor=monitor,
             on_failure=on_failure,
+            config=config,
         )
 
 
@@ -1067,11 +1076,7 @@ def manage_all_services(
             typer.echo("Error: --monitor can only be used with the 'status' action", err=True)
             raise typer.Exit(1)
 
-        # Load configuration
-        yaml_configs = load_all_configurations()
-        merged_config = merge_configurations(yaml_configs)
-        config = validate_configuration(merged_config)
-        config = resolve_services(config)
+        config = _load_config()
 
         # Load context
         current_context = get_context()

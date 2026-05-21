@@ -292,10 +292,10 @@ class TestServiceShortcuts:
              patch("src.dagdi.commands.service_management.resolve_services", return_value=sample_config), \
              patch("src.dagdi.commands.service_management.get_context", return_value=None), \
              patch("src.dagdi.commands.service_management.resolve_scope", return_value=fake_scope), \
-             patch("src.dagdi.commands.service_management.prepare_sudo_auth", return_value=True) as mock_prepare_sudo_auth, \
-             patch("src.dagdi.commands.service_management.validate_sudo_auth") as mock_validate_sudo_auth, \
-             patch("src.dagdi.commands.service_management.warm_up_connection") as mock_warm_up, \
-             patch("src.dagdi.commands.service_management.execute_command", return_value=ExecutionResult(stdout="", return_code=0)), \
+             patch("dagdi.ssh.executor.prepare_sudo_auth", return_value=True) as mock_prepare_sudo_auth, \
+             patch("dagdi.ssh.executor.validate_sudo_auth") as mock_validate_sudo_auth, \
+             patch("dagdi.ssh.executor.warm_up_connection") as mock_warm_up, \
+             patch("dagdi.ssh.executor.execute_command", return_value=ExecutionResult(stdout="", return_code=0)), \
              patch("rich.live.Live", return_value=fake_live), \
              patch("src.dagdi.commands.service_management.time.sleep", side_effect=KeyboardInterrupt):
             result = runner.invoke(service_app, ["mas", "status", "--monitor"])
@@ -341,10 +341,10 @@ class TestStatusCommandBuilder:
              patch("src.dagdi.commands.service_management.validate_configuration", return_value=sample_config), \
              patch("src.dagdi.commands.service_management.resolve_services", return_value=sample_config), \
              patch("src.dagdi.commands.service_management.get_context", return_value=None), \
-             patch("src.dagdi.commands.service_management.warm_up_connection"), \
-             patch("src.dagdi.commands.service_management.prepare_sudo_auth"), \
-             patch("src.dagdi.commands.service_management.validate_sudo_auth"), \
-             patch("src.dagdi.commands.service_management.execute_command", return_value=ExecutionResult(stdout="active (running)", return_code=0)) as mock_execute:
+             patch("dagdi.ssh.executor.warm_up_connection"), \
+             patch("dagdi.ssh.executor.prepare_sudo_auth"), \
+             patch("dagdi.ssh.executor.validate_sudo_auth"), \
+             patch("dagdi.ssh.executor.execute_command", return_value=ExecutionResult(stdout="active (running)", return_code=0)) as mock_execute:
             result = runner.invoke(service_app, ["ms", "nginx", "status", "-p", "myapp", "-e", "dev"])
 
         assert result.exit_code == 0
@@ -378,10 +378,10 @@ class TestStatusCommandBuilder:
              patch("src.dagdi.commands.service_management.validate_configuration", return_value=sample_config), \
              patch("src.dagdi.commands.service_management.resolve_services", return_value=sample_config), \
              patch("src.dagdi.commands.service_management.get_context", return_value=None), \
-             patch("src.dagdi.commands.service_management.warm_up_connection"), \
-             patch("src.dagdi.commands.service_management.prepare_sudo_auth"), \
-             patch("src.dagdi.commands.service_management.validate_sudo_auth"), \
-             patch("src.dagdi.commands.service_management.execute_command", side_effect=fake_execute):
+             patch("dagdi.ssh.executor.warm_up_connection"), \
+             patch("dagdi.ssh.executor.prepare_sudo_auth"), \
+             patch("dagdi.ssh.executor.validate_sudo_auth"), \
+             patch("dagdi.ssh.executor.execute_command", side_effect=fake_execute):
             result = runner.invoke(service_app, ["ms", "nginx", "status", "-p", "myapp", "-e", "dev"])
 
         assert result.exit_code == 0
@@ -412,10 +412,10 @@ class TestStatusCommandBuilder:
              patch("src.dagdi.commands.service_management.validate_configuration", return_value=sample_config), \
              patch("src.dagdi.commands.service_management.resolve_services", return_value=sample_config), \
              patch("src.dagdi.commands.service_management.get_context", return_value=None), \
-             patch("src.dagdi.commands.service_management.warm_up_connection"), \
-             patch("src.dagdi.commands.service_management.prepare_sudo_auth"), \
-             patch("src.dagdi.commands.service_management.validate_sudo_auth"), \
-             patch("src.dagdi.commands.service_management.execute_command", side_effect=fake_execute):
+             patch("dagdi.ssh.executor.warm_up_connection"), \
+             patch("dagdi.ssh.executor.prepare_sudo_auth"), \
+             patch("dagdi.ssh.executor.validate_sudo_auth"), \
+             patch("dagdi.ssh.executor.execute_command", side_effect=fake_execute):
             result = runner.invoke(service_app, ["mas", "status", "-p", "myapp", "-e", "dev"])
 
         assert result.exit_code == 0
