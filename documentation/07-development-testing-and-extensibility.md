@@ -124,11 +124,14 @@ To add another type safely:
 4. Show in `config show-settings`
 5. Add tests for parsing and usage
 
+The `theme` setting is a working example of this pattern: field in `GlobalSettings`, validated against `AVAILABLE_THEMES` in the validator, activated via `set_theme()` at validation time, and shown in `show-settings`.
+
 ## Design Conventions in Codebase
 
 - Dataclass models for shared typed structures
 - Error translation at module boundaries (e.g., storage -> manager)
 - Rich CLI output over raw prints where formatting matters
+- Theme-driven styling via `output/themes.py` — use `styled()` and `get_theme()` instead of hardcoded Rich markup
 - Explicit command-level try/except with user-readable messages
 - Scope resolution centralized, not duplicated in commands
 

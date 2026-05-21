@@ -164,6 +164,9 @@ global_settings:
   live_status_table: true
   # Show live updating status table in monitoring commands
 
+  theme: default
+  # Color theme for CLI output: default, light, dark, no_color
+
 # NOTES:
 # - Services are defined inline with each server
 # - Same service (e.g., nginx) is repeated in multiple places

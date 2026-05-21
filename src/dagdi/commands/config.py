@@ -127,6 +127,7 @@ global_settings:
   ssh_port: 22                # Default SSH port for all servers (override per server)
   on_partial_failure: prompt  # Options: continue, stop, prompt
   live_status_table: false    # Feature flag: stream status table while checks run
+  theme: default              # Color theme: default, light, dark, no_color
 
 # Configuration Guide:
 # 
@@ -172,6 +173,7 @@ global_settings:
 #     - continue: Continue with remaining targets
 #     - stop: Stop on first failure
 #   live_status_table: Enable live/incremental status table rendering (default: false)
+#   theme: Color theme for CLI output (default, light, dark, no_color)
 """
 
 
@@ -271,6 +273,7 @@ def show_settings() -> None:
         typer.echo(f"  SSH Port: {settings.ssh_port}")
         typer.echo(f"  On Partial Failure: {settings.on_partial_failure}")
         typer.echo(f"  Live Status Table: {settings.live_status_table}")
+        typer.echo(f"  Theme: {settings.theme}")
         
     except Exception as e:
         typer.echo(f"Error: {str(e)}", err=True)

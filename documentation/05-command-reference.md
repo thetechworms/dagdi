@@ -37,7 +37,10 @@ Creates `dagdi-template.yaml` in `~/.config/dagdi/` (or `DAGDI_CONFIG_DIR`) with
 Prints current global settings:
 
 - `SSH Timeout`
+- `SSH Port`
 - `On Partial Failure`
+- `Live Status Table`
+- `Theme`
 
 ## Context Commands
 

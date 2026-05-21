@@ -11,6 +11,7 @@ from ..config.validator import validate_configuration
 from ..config.resolver import resolve_services
 from ..context import manager, validator
 from ..models import Configuration
+from ..output.themes import get_theme, styled
 
 _console = Console()
 
@@ -163,22 +164,23 @@ def get() -> None:
     """Get the current context."""
     try:
         context = manager.get_context()
+        t = get_theme()
         if context is None:
             _console.print(Panel(
-                "[dim]No context set.[/dim]\n"
-                "Use [cyan]dagdi context set -p <product> -e <environment>[/cyan]",
+                f"{styled('No context set.', 'label')}\n"
+                f"Use {styled('dagdi context set -p <product> -e <environment>', 'highlight')}",
                 title="Current Context",
-                border_style="yellow",
+                border_style=t.panel_warning,
             ))
             return
         product = context.get("product", "unknown")
         environment = context.get("environment", "unknown")
         timestamp = context.get("timestamp", "unknown")
         _console.print(Panel(
-            f"[bold]{product}[/bold] / [bold]{environment}[/bold]\n"
-            f"[dim]Set at: {timestamp}[/dim]",
+            f"{styled(product, 'bold')} / {styled(environment, 'bold')}\n"
+            f"{styled(f'Set at: {timestamp}', 'label')}",
             title="Current Context",
-            border_style="green",
+            border_style=t.panel_active,
         ))
     except Exception as e:
         typer.echo(f"Error: {str(e)}", err=True)
@@ -202,11 +204,12 @@ def list() -> None:
     try:
         contexts = manager.list_contexts()
         current_name = manager.get_current_context_name()
+        t = get_theme()
         if not contexts:
             _console.print(Panel(
-                "[dim]No contexts saved yet.[/dim]",
+                styled("No contexts saved yet.", "label"),
                 title="Saved Contexts",
-                border_style="blue",
+                border_style=t.panel_inactive,
             ))
             return
         from rich.text import Text
@@ -216,10 +219,10 @@ def list() -> None:
             environment = context.get("environment", "unknown")
             if name == current_name:
                 lines.append(f"  {name}: {product}/{environment} ", style="bold")
-                lines.append("(current)\n", style="bold green")
+                lines.append("(current)\n", style=t.success)
             else:
                 lines.append(f"  {name}: {product}/{environment}\n")
-        _console.print(Panel(lines, title="Saved Contexts", border_style="blue"))
+        _console.print(Panel(lines, title="Saved Contexts", border_style=t.panel_inactive))
     except Exception as e:
         typer.echo(f"Error: {str(e)}", err=True)
         raise typer.Exit(1)

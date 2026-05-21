@@ -42,6 +42,14 @@ This section records implementation-accurate behavior that operators and contrib
 - Prefer root SSH user or passwordless sudo where policy allows, to avoid interactive sudo prompts.
 - Keep context project-local by creating `.dagdi/` in the repo.
 
+## Behavior Note: Theme System
+
+- `global_settings.theme` is validated at config load time and fully enforced at runtime.
+- All CLI output colors are driven through `output/themes.py` semantic roles (`styled()`, `get_theme()`).
+- Available themes: `default`, `light`, `dark`, `no_color`.
+- Use `no_color` for terminals with ANSI rendering issues or CI pipelines.
+- Unlike other global settings, `theme` is immediately active after config validation — no separate runtime wiring needed.
+
 ## Suggested Improvement Backlog
 
 1. Implement centralized partial-failure policy engine (`continue|stop|prompt`) and consume in all loops.

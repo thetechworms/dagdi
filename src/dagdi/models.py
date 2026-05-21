@@ -66,11 +66,12 @@ class Product:
 @dataclass
 class GlobalSettings:
     """Global settings for Dagdi CLI."""
-    
+
     ssh_timeout: int = 30
     ssh_port: int = 22
     on_partial_failure: Literal["continue", "stop", "prompt"] = "prompt"
     live_status_table: bool = False
+    theme: str = "default"
 
 
 @dataclass

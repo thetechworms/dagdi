@@ -80,6 +80,7 @@ global_settings:                            # optional
   ssh_port: <int_port>                      # default: 22, range 1-65535
   on_partial_failure: <continue|stop|prompt># default: prompt
   live_status_table: <true|false>           # default: false
+  theme: <default|light|dark|no_color>      # default: default
 ```
 
 ## Required vs Optional
@@ -211,8 +212,13 @@ Sudo behavior controls:
 
 Current implementation detail:
 
-- `ssh_timeout`, `ssh_port`, `on_partial_failure`, and `live_status_table` are visible via `dagdi config show-settings`
+- `ssh_timeout`, `ssh_port`, `on_partial_failure`, `live_status_table`, and `theme` are visible via `dagdi config show-settings`
 - `live_status_table` controls whether `status` commands render incrementally as results arrive
+- `theme` controls CLI output colors. Available themes:
+  - `default` — standard colors, works on most dark-background terminals
+  - `light` — darker shades tuned for light-background terminals
+  - `dark` — high-contrast bright colors for dark terminals
+  - `no_color` — disables all color/styling (useful for terminals with ANSI issues or CI pipelines)
 - Some command implementations currently do not automatically apply global settings to runtime behavior unless explicit command options are passed
 
 ## Production-Friendly Config Tips
@@ -252,4 +258,5 @@ global_settings:
   ssh_port: 22
   on_partial_failure: prompt
   live_status_table: true
+  theme: default
 ```

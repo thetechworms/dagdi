@@ -9,6 +9,8 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
+from .themes import get_theme, styled
+
 
 console = Console()
 
@@ -18,12 +20,15 @@ console = Console()
 # ---------------------------------------------------------------------------
 
 def colorize_metric(value: float, fmt: str = ".1f") -> str:
+    t = get_theme()
     if value >= 80:
-        style = "bold red"
+        style = t.metric_critical
     elif value >= 50:
-        style = "yellow"
+        style = t.metric_warning
     else:
-        style = "green"
+        style = t.metric_normal
+    if not style:
+        return f"{value:{fmt}}"
     return f"[{style}]{value:{fmt}}[/{style}]"
 
 
@@ -31,44 +36,52 @@ def colorize_metric(value: float, fmt: str = ".1f") -> str:
 # Status indicators
 # ---------------------------------------------------------------------------
 
-_STATUS_INDICATORS = {
-    "RUNNING": "[green]● RUNNING[/green]",
-    "STOPPED": "[red]● STOPPED[/red]",
-    "FAILED": "[bold red]● FAILED[/bold red]",
-    "NOT_FOUND": "[dim]● NOT_FOUND[/dim]",
-    "UNKNOWN": "[yellow]● UNKNOWN[/yellow]",
-}
-
-
 def format_status_indicator(status: str) -> str:
-    return _STATUS_INDICATORS.get(status, f"[yellow]● {status}[/yellow]")
+    t = get_theme()
+    _STATUS_ROLE = {
+        "RUNNING": t.status_running,
+        "STOPPED": t.status_stopped,
+        "FAILED": t.status_failed,
+        "NOT_FOUND": t.status_not_found,
+        "UNKNOWN": t.status_unknown,
+    }
+    style = _STATUS_ROLE.get(status, t.status_unknown)
+    if not style:
+        return f"● {status}"
+    return f"[{style}]● {status}[/{style}]"
 
 
 # ---------------------------------------------------------------------------
 # Log-level highlighting
 # ---------------------------------------------------------------------------
 
-_LOG_LEVEL_STYLES = {
-    "ERROR": "bold red",
-    "FATAL": "bold red",
-    "WARN": "yellow",
-    "WARNING": "yellow",
-    "INFO": "blue",
-    "DEBUG": "dim",
-    "TRACE": "dim",
-}
+_LOG_LEVEL_KEYS = ["ERROR", "FATAL", "WARN", "WARNING", "INFO", "DEBUG", "TRACE"]
 
 _LOG_LEVEL_PATTERN = re.compile(
-    r"\b(" + "|".join(_LOG_LEVEL_STYLES.keys()) + r")\b",
+    r"\b(" + "|".join(_LOG_LEVEL_KEYS) + r")\b",
     re.IGNORECASE,
 )
+
+
+def _log_level_role(level: str) -> str:
+    t = get_theme()
+    _mapping = {
+        "ERROR": t.log_error,
+        "FATAL": t.log_error,
+        "WARN": t.log_warn,
+        "WARNING": t.log_warn,
+        "INFO": t.log_info,
+        "DEBUG": t.log_debug,
+        "TRACE": t.log_debug,
+    }
+    return _mapping.get(level, "")
 
 
 def highlight_log_line(line: str) -> str:
     def _replace(match: re.Match) -> str:
         level = match.group(0).upper()
         key = "WARN" if level == "WARNING" else level
-        style = _LOG_LEVEL_STYLES.get(key, "")
+        style = _log_level_role(key)
         if style:
             return f"[{style}]{match.group(0)}[/{style}]"
         return match.group(0)
@@ -107,23 +120,22 @@ def format_hierarchical(
     environment_name: str,
     servers: List[Dict[str, Any]],
 ) -> None:
+    t = get_theme()
     tree = Tree(
-        f"[bold blue]{product_name}[/bold blue] / "
-        f"[bold blue]{environment_name}[/bold blue]"
+        f"{styled(product_name, 'product')} / "
+        f"{styled(environment_name, 'product')}"
     )
 
     for server in servers:
-        server_label = (
-            f"[bold cyan]{server['name']}[/bold cyan] ({server['type']})"
-        )
+        server_label = f"{styled(server['name'], 'server')} ({server['type']})"
         server_branch = tree.add(server_label)
 
         for ip in server.get("ips", []):
-            server_branch.add(f"[dim]IP:[/dim] {ip}")
+            server_branch.add(f"{styled('IP:', 'label')} {ip}")
 
         services = server.get("services", [])
         if services:
-            svc_branch = server_branch.add("[bold green]Services[/bold green]")
+            svc_branch = server_branch.add(styled("Services", "service"))
             for service in services:
                 friendly_name = service.get("friendly_name")
                 if friendly_name:
@@ -135,13 +147,19 @@ def format_hierarchical(
                 svc_node = svc_branch.add(svc_label)
 
                 if service.get("api_endpoint"):
-                    svc_node.add(f"[dim]API:[/dim] {service['api_endpoint']}")
+                    svc_node.add(
+                        f"{styled('API:', 'label')} {service['api_endpoint']}"
+                    )
                 if service.get("port") is not None:
-                    svc_node.add(f"[dim]Port:[/dim] {service['port']}")
+                    svc_node.add(
+                        f"{styled('Port:', 'label')} {service['port']}"
+                    )
                 if service.get("log_location"):
-                    svc_node.add(f"[dim]Log:[/dim] {service['log_location']}")
+                    svc_node.add(
+                        f"{styled('Log:', 'label')} {service['log_location']}"
+                    )
         else:
-            server_branch.add("[dim]No services[/dim]")
+            server_branch.add(styled("No services", "label"))
 
     console.print()
     console.print(tree)
@@ -156,40 +174,40 @@ def format_error(
 ) -> None:
     """
     Display a formatted error message.
-    
+
     Args:
         title: Error title
         details: Error details
         suggestion: Optional suggestion for fixing the error
         available_options: Optional list of available options
     """
-    console.print(f"\n[bold red]ERROR:[/bold red] {title}")
-    console.print(f"  [yellow]Details:[/yellow] {details}")
-    
+    console.print(f"\n{styled('ERROR:', 'error')} {title}")
+    console.print(f"  {styled('Details:', 'detail')} {details}")
+
     if suggestion:
-        console.print(f"  [cyan]Suggestion:[/cyan] {suggestion}")
-    
+        console.print(f"  {styled('Suggestion:', 'suggestion')} {suggestion}")
+
     if available_options:
-        console.print(f"  [cyan]Available options:[/cyan]")
+        console.print(f"  {styled('Available options:', 'suggestion')}")
         for option in available_options:
             console.print(f"    • {option}")
-    
+
     console.print()
 
 
 def format_success(message: str) -> None:
     """Display a success message."""
-    console.print(f"[bold green]✓[/bold green] {message}")
+    console.print(f"{styled('✓', 'success')} {message}")
 
 
 def format_info(message: str) -> None:
     """Display an info message."""
-    console.print(f"[bold blue]ℹ[/bold blue] {message}")
+    console.print(f"{styled('ℹ', 'info')} {message}")
 
 
 def format_warning(message: str) -> None:
     """Display a warning message."""
-    console.print(f"[bold yellow]⚠[/bold yellow] {message}")
+    console.print(f"{styled('⚠', 'warning')} {message}")
 
 
 class Formatter:
@@ -197,9 +215,10 @@ class Formatter:
 
     @staticmethod
     def display_metrics_table(metrics_list: List[Dict[str, Any]]) -> None:
+        t = get_theme()
         table = Table(title="System Metrics", box=box.ROUNDED, show_lines=True)
-        table.add_column("Server", style="cyan")
-        table.add_column("IP", style="magenta")
+        table.add_column("Server", style=t.col_server)
+        table.add_column("IP", style=t.col_ip)
         table.add_column("CPU %", justify="right")
         table.add_column("RAM %", justify="right")
         table.add_column("Disk %", justify="right")

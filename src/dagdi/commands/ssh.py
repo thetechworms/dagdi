@@ -17,6 +17,7 @@ from dagdi.config.validator import validate_configuration
 from dagdi.config.resolver import resolve_services
 from dagdi.context.manager import get_context
 from dagdi.models import Server
+from dagdi.output.themes import get_theme, styled
 from dagdi.resolver import resolve_scope
 
 
@@ -53,16 +54,17 @@ def _build_ssh_args(ssh_binary: str, server: Server, ip: str) -> List[str]:
 
 def _display_server_table(servers: List[Server]) -> None:
     """Display a Rich table of servers for selection."""
+    t = get_theme()
     table = Table(
         title="Available Servers",
         box=box.ROUNDED,
         show_lines=True,
-        title_style="bold cyan",
+        title_style=t.title,
     )
-    table.add_column("#", style="bold yellow", justify="right", width=4)
-    table.add_column("Server", style="bold white")
-    table.add_column("IP(s)", style="cyan")
-    table.add_column("Services", style="green")
+    table.add_column("#", style=t.number, justify="right", width=4)
+    table.add_column("Server", style=t.bold)
+    table.add_column("IP(s)", style=t.col_server)
+    table.add_column("Services", style=t.col_service)
 
     for idx, server in enumerate(servers, 1):
         ips = ", ".join(server.ips)
@@ -85,7 +87,10 @@ def _prompt_server_selection(servers: List[Server]) -> Server:
         if 1 <= choice <= len(servers):
             return servers[choice - 1]
         console.print(
-            f"[red]Invalid choice. Please enter a number between 1 and {len(servers)}.[/red]"
+            styled(
+                f"Invalid choice. Please enter a number between 1 and {len(servers)}.",
+                "error_text",
+            )
         )
 
 
@@ -94,9 +99,12 @@ def _prompt_ip_selection(server: Server) -> str:
     if len(server.ips) == 1:
         return server.ips[0]
 
-    console.print(f"\n[bold]Server [cyan]{server.name}[/cyan] has multiple IPs:[/bold]")
+    console.print(
+        f"\n{styled('Server', 'bold')} {styled(server.name, 'highlight')} "
+        f"{styled('has multiple IPs:', 'bold')}"
+    )
     for idx, ip in enumerate(server.ips, 1):
-        console.print(f"  [yellow]{idx}[/yellow]. {ip}")
+        console.print(f"  {styled(str(idx), 'username')}. {ip}")
     console.print()
 
     while True:
@@ -104,8 +112,11 @@ def _prompt_ip_selection(server: Server) -> str:
         if 1 <= choice <= len(server.ips):
             return server.ips[choice - 1]
         console.print(
-            f"[red]Invalid choice. Please enter a number between 1 and "
-            f"{len(server.ips)}.[/red]"
+            styled(
+                f"Invalid choice. Please enter a number between 1 and "
+                f"{len(server.ips)}.",
+                "error_text",
+            )
         )
 
 
@@ -174,8 +185,8 @@ def ssh(
             target_server = scope.servers[0]
         else:
             console.print(
-                f"[bold]Servers in [cyan]{scope.product}[/cyan] / "
-                f"[cyan]{scope.environment}[/cyan]:[/bold]"
+                f"{styled('Servers in', 'bold')} {styled(scope.product, 'highlight')} / "
+                f"{styled(scope.environment, 'highlight')}:"
             )
             target_server = _prompt_server_selection(scope.servers)
 
@@ -188,10 +199,10 @@ def ssh(
             port_info = f" (port {target_server.ssh_config.port})"
 
         console.print(
-            f"\n[bold green]Connecting to[/bold green] "
-            f"[cyan]{target_server.name}[/cyan] "
+            f"\n{styled('Connecting to', 'success')} "
+            f"{styled(target_server.name, 'highlight')} "
             f"({target_ip}){port_info} "
-            f"as [yellow]{target_server.ssh_config.username}[/yellow]...\n"
+            f"as {styled(target_server.ssh_config.username, 'username')}...\n"
         )
 
         _exec_ssh(args)

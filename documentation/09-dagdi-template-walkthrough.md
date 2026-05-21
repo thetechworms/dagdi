@@ -26,6 +26,7 @@ global_settings:
   ssh_timeout: 30
   on_partial_failure: prompt
   live_status_table: false
+  theme: default
 ```
 
 ## Environment Structure
@@ -140,6 +141,7 @@ global_settings:
   ssh_timeout: 30
   on_partial_failure: prompt
   live_status_table: false
+  theme: default
 ```
 
 Semantics:
@@ -147,10 +149,12 @@ Semantics:
 - `ssh_timeout`: intended default timeout
 - `on_partial_failure`: intended failure policy
 - `live_status_table`: feature flag for progressive status-table updates while checks run
+- `theme`: color theme for CLI output (`default`, `light`, `dark`, `no_color`)
 
 Implementation note:
 
 - Values are loaded/validated and visible in `show-settings`; runtime enforcement is partial in current code.
+- `theme` is fully enforced at runtime: all output colors and styles are driven by the selected theme.
 
 ## Adapting Template to Real Infra
 

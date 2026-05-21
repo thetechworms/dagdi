@@ -15,6 +15,7 @@ from dagdi.config.validator import validate_configuration
 from dagdi.config.resolver import resolve_services
 from dagdi.context.manager import get_context
 from dagdi.output.formatter import Formatter, format_status_indicator
+from dagdi.output.themes import get_theme, styled
 from dagdi.resolver import resolve_scope, get_target_ips
 from dagdi.ssh.executor import (
     execute_command,
@@ -207,7 +208,7 @@ def _execute_service_targets_parallel(
     def _on_complete(done: int, total: int) -> None:
         if status_ctx is not None:
             status_ctx.update(
-                f"[bold blue]{action.capitalize()} [{done}/{total} targets]...[/bold blue]"
+                styled(f"{action.capitalize()} [{done}/{total} targets]...", "progress")
             )
 
     def worker(target: Tuple[Any, str]) -> Tuple[Optional[dict], Optional[dict]]:
@@ -707,7 +708,7 @@ def _execute_service_action(
             else:
                 total = len(target_ips)
                 with _progress_console.status(
-                    f"[bold blue]{action.capitalize()} [0/{total} targets]...[/bold blue]",
+                    styled(f"{action.capitalize()} [0/{total} targets]...", "progress"),
                     spinner="dots",
                 ) as spin:
                     results, failures = _execute_service_targets_parallel(
@@ -765,10 +766,11 @@ def _display_action_results(results: List[dict], action: str) -> None:
     from rich.table import Table
 
     console = Console()
+    t = get_theme()
     table = Table(title=f"Service {action.capitalize()}", box=box.ROUNDED, show_lines=True)
-    table.add_column("Server", style="cyan")
-    table.add_column("Service", style="green")
-    table.add_column("Result", style="yellow")
+    table.add_column("Server", style=t.col_server)
+    table.add_column("Service", style=t.col_service)
+    table.add_column("Result", style=t.col_result)
 
     sorted_results = _sort_results_by_server(results)
     prev_server_key = None
@@ -783,11 +785,11 @@ def _display_action_results(results: List[dict], action: str) -> None:
 
         success = result["success"]
         result_text = "SUCCESS" if success else "FAILED"
-        result_style = "green" if success else "red"
+        role = "status_running" if success else "status_stopped"
         table.add_row(
             server_label,
             result["service"],
-            f"[{result_style}]{result_text}[/{result_style}]",
+            styled(result_text, role),
         )
 
     console.print(table)
@@ -811,14 +813,15 @@ def _build_status_table(title: str, results: List[dict]):
     from rich import box
     from rich.table import Table
 
+    t = get_theme()
     table = Table(title=title, box=box.ROUNDED, show_lines=True)
-    table.add_column("Server", style="cyan")
-    table.add_column("Service", style="green")
-    table.add_column("Type", style="blue")
-    table.add_column("PID", style="cyan")
-    table.add_column("CPU", style="magenta")
-    table.add_column("RAM", style="magenta")
-    table.add_column("Since", style="blue")
+    table.add_column("Server", style=t.col_server)
+    table.add_column("Service", style=t.col_service)
+    table.add_column("Type", style=t.col_type)
+    table.add_column("PID", style=t.col_pid)
+    table.add_column("CPU", style=t.col_metric)
+    table.add_column("RAM", style=t.col_metric)
+    table.add_column("Since", style=t.col_since)
     table.add_column("Status")
 
     sorted_results = _sort_results_by_server(results)
@@ -835,16 +838,16 @@ def _build_status_table(title: str, results: List[dict]):
         status = result["status"]
         status_text = format_status_indicator(status)
         if result.get("_status_changed"):
-            status_text = f"[bold]{status_text}[/bold]"
+            status_text = styled(status_text, "bold")
 
         cpu_val = result.get("cpu", "N/A")
         ram_val = result.get("ram", "N/A")
         if cpu_val in ("N/A", "-", ""):
-            cpu_display = f"[dim]{cpu_val}[/dim]"
+            cpu_display = styled(cpu_val, "label")
         else:
             cpu_display = str(cpu_val)
         if ram_val in ("N/A", "-", ""):
-            ram_display = f"[dim]{ram_val}[/dim]"
+            ram_display = styled(ram_val, "label")
         else:
             ram_display = str(ram_val)
 
@@ -869,10 +872,11 @@ def _display_consolidated_action(results: List[dict], action: str) -> None:
     from rich.table import Table
 
     console = Console()
+    t = get_theme()
     table = Table(title=f"All Services {action.capitalize()}", box=box.ROUNDED, show_lines=True)
-    table.add_column("Server", style="cyan")
-    table.add_column("Service", style="green")
-    table.add_column("Result", style="yellow")
+    table.add_column("Server", style=t.col_server)
+    table.add_column("Service", style=t.col_service)
+    table.add_column("Result", style=t.col_result)
 
     sorted_results = _sort_results_by_server(results)
     prev_server_key = None
@@ -887,11 +891,11 @@ def _display_consolidated_action(results: List[dict], action: str) -> None:
 
         success = result["success"]
         result_text = "SUCCESS" if success else "FAILED"
-        result_style = "green" if success else "red"
+        role = "status_running" if success else "status_stopped"
         table.add_row(
             server_label,
             result["service"],
-            f"[{result_style}]{result_text}[/{result_style}]",
+            styled(result_text, role),
         )
 
     console.print(table)
@@ -1158,8 +1162,11 @@ def manage_all_services(
                 )
             else:
                 with _progress_console.status(
-                    f"[bold blue]{action.capitalize()} all services "
-                    f"on {len(target_ips)} target(s)...[/bold blue]",
+                    styled(
+                        f"{action.capitalize()} all services "
+                        f"on {len(target_ips)} target(s)...",
+                        "progress",
+                    ),
                     spinner="dots",
                 ):
                     all_results, all_failures = _execute_all_services_parallel(

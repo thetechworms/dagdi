@@ -18,6 +18,7 @@ from dagdi.config.validator import validate_configuration
 from dagdi.config.resolver import resolve_services
 from dagdi.context.manager import get_context
 from dagdi.output.formatter import Formatter, colorize_metric
+from dagdi.output.themes import get_theme, styled
 from dagdi.resolver import resolve_scope
 from dagdi.ssh.metrics_collector import MetricsCollector
 
@@ -45,14 +46,16 @@ def _apply_monitor_change_highlights(
         prev_snapshot = previous_values.get(key)
 
         if prev_snapshot:
+            t = get_theme()
             for field in track_fields:
                 old = prev_snapshot.get(field, "")
                 new = snapshot[field]
                 if new != old:
                     if field in {"cpu", "ram", "disk"}:
-                        row[field] = f"[bold bright_yellow]{result.get(field, 0):.1f}[/bold bright_yellow]"
+                        val = f"{result.get(field, 0):.1f}"
                     else:
-                        row[field] = f"[bold bright_yellow]{result.get(field, 0):.2f}[/bold bright_yellow]"
+                        val = f"{result.get(field, 0):.2f}"
+                    row[field] = styled(val, "metric_changed")
 
         highlighted_results.append(row)
 
@@ -78,9 +81,10 @@ def _interruptible_sleep(seconds: float, interval: float = 0.3) -> None:
 
 def _build_metrics_table(title: str, metrics_list: List[dict]) -> Table:
     """Build a rich table for server metrics."""
+    t = get_theme()
     table = Table(title=title, box=box.ROUNDED, show_lines=True)
-    table.add_column("Server", style="cyan")
-    table.add_column("IP", style="magenta")
+    table.add_column("Server", style=t.col_server)
+    table.add_column("IP", style=t.col_ip)
     table.add_column("CPU %", justify="right")
     table.add_column("RAM %", justify="right")
     table.add_column("Disk %", justify="right")
@@ -122,7 +126,7 @@ def _collect_metrics_for_targets(
     def _on_complete(done: int, total: int) -> None:
         if status_ctx is not None:
             status_ctx.update(
-                f"[bold blue]Collecting metrics [{done}/{total} targets]...[/bold blue]"
+                styled(f"Collecting metrics [{done}/{total} targets]...", "progress")
             )
 
     def collect_target(task: Tuple[Any, str]) -> tuple[Optional[dict], Optional[dict]]:
@@ -153,7 +157,7 @@ def _collect_metrics_for_targets(
 
     if show_progress:
         status_ctx = _progress_console.status(
-            f"[bold blue]Collecting metrics [0/{total} targets]...[/bold blue]",
+            styled(f"Collecting metrics [0/{total} targets]...", "progress"),
             spinner="dots",
         )
         status_ctx.start()

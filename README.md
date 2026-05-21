@@ -122,6 +122,7 @@ global_settings:
   ssh_timeout: 30
   ssh_port: 22                # default SSH port for all servers
   on_partial_failure: prompt
+  theme: default              # color theme: default, light, dark, no_color
 ```
 
 Dagdi supports two YAML formats: services defined inline under each server (shown above), or services defined once globally and referenced by name via `service_names`. See [configuration reference](documentation/03-configuration-reference.md) for details.

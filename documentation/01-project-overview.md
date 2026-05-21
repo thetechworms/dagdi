@@ -69,7 +69,7 @@ Typical command lifecycle:
 - `src/dagdi/config/`: Config discovery/merge/validation
 - `src/dagdi/context/`: Context storage + management + validation
 - `src/dagdi/ssh/`: SSH pooling, command execution, metrics, command generation
-- `src/dagdi/output/`: Rich output formatters
+- `src/dagdi/output/`: Rich output formatters and theme system
 - `src/dagdi/models.py`: Dataclasses used across modules
 - `tests/unit/`: Behavior-driven unit tests
 

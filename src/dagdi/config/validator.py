@@ -83,6 +83,16 @@ def validate_configuration(config_dict: Dict[str, Any]) -> Configuration:
                     raise ValidationError("'global_settings.live_status_table' must be a boolean")
                 global_settings.live_status_table = value
 
+            if "theme" in gs_dict:
+                from dagdi.output.themes import AVAILABLE_THEMES
+                value = gs_dict["theme"]
+                if not isinstance(value, str) or value not in AVAILABLE_THEMES:
+                    raise ValidationError(
+                        f"'global_settings.theme' must be one of "
+                        f"{', '.join(AVAILABLE_THEMES)}, got '{value}'"
+                    )
+                global_settings.theme = value
+
     # Validate global services (if present)
     global_services = []
     if "services" in config_dict:
@@ -104,6 +114,9 @@ def validate_configuration(config_dict: Dict[str, Any]) -> Configuration:
 
     if errors:
         raise ValidationError("\n".join(errors))
+
+    from dagdi.output.themes import set_theme
+    set_theme(global_settings.theme)
 
     return Configuration(products=products, services=global_services, global_settings=global_settings)
 

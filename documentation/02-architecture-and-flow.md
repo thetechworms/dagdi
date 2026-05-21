@@ -74,6 +74,8 @@ For most operational commands, the flow is:
   - Global settings:
     - `ssh_timeout=30`
     - `on_partial_failure=prompt`
+    - `theme=default`
+- Activates the configured theme via `set_theme()`
 
 ## Context Subsystem Flow
 
@@ -161,6 +163,15 @@ Supported scope types:
 - Hierarchical topology rendering
 - Error/info/success/warning formatting
 - Metrics table rendering
+
+`output/themes.py` provides:
+
+- `Theme` dataclass with semantic color roles (status indicators, metric thresholds, log levels, table columns, interactive elements)
+- Four built-in themes: `default`, `light`, `dark`, `no_color`
+- `styled()` helper that wraps text with the active theme's Rich markup for a given role
+- `set_theme()` / `get_theme()` for activating and reading the current theme
+
+The theme is activated during config validation based on `global_settings.theme`. All formatter functions and command output code use `get_theme()` and `styled()` instead of hardcoded color strings, making the entire CLI appearance configurable.
 
 All user-facing output is terminal-oriented and rich-formatted where applicable.
 
