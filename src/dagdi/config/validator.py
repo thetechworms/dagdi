@@ -48,63 +48,9 @@ def validate_configuration(config_dict: Dict[str, Any]) -> Configuration:
     if len(config_dict["products"]) == 0:
         raise ValidationError("'products' list cannot be empty")
     
-    # Validate global settings first (needed by product/server validation)
-    global_settings = GlobalSettings()
-    if "global_settings" in config_dict:
-        gs_dict = config_dict["global_settings"]
-        if isinstance(gs_dict, dict):
-            if "ssh_timeout" in gs_dict:
-                try:
-                    global_settings.ssh_timeout = int(gs_dict["ssh_timeout"])
-                except (ValueError, TypeError):
-                    raise ValidationError("'global_settings.ssh_timeout' must be an integer")
-
-            if "ssh_port" in gs_dict:
-                try:
-                    global_settings.ssh_port = int(gs_dict["ssh_port"])
-                except (ValueError, TypeError):
-                    raise ValidationError("'global_settings.ssh_port' must be an integer")
-                if global_settings.ssh_port < 1 or global_settings.ssh_port > 65535:
-                    raise ValidationError(
-                        "'global_settings.ssh_port' must be between 1 and 65535"
-                    )
-
-            if "on_partial_failure" in gs_dict:
-                value = gs_dict["on_partial_failure"]
-                if value not in ("continue", "stop", "prompt"):
-                    raise ValidationError(
-                        f"'global_settings.on_partial_failure' must be 'continue', 'stop', or 'prompt', got '{value}'"
-                    )
-                global_settings.on_partial_failure = value
-
-            if "live_status_table" in gs_dict:
-                value = gs_dict["live_status_table"]
-                if not isinstance(value, bool):
-                    raise ValidationError("'global_settings.live_status_table' must be a boolean")
-                global_settings.live_status_table = value
-
-            if "theme" in gs_dict:
-                from dagdi.output.themes import AVAILABLE_THEMES
-                value = gs_dict["theme"]
-                if not isinstance(value, str) or value not in AVAILABLE_THEMES:
-                    raise ValidationError(
-                        f"'global_settings.theme' must be one of "
-                        f"{', '.join(AVAILABLE_THEMES)}, got '{value}'"
-                    )
-                global_settings.theme = value
-
-            if "log_buffer_size" in gs_dict:
-                try:
-                    value = int(gs_dict["log_buffer_size"])
-                except (ValueError, TypeError):
-                    raise ValidationError(
-                        "'global_settings.log_buffer_size' must be an integer"
-                    )
-                if value < 100 or value > 100000:
-                    raise ValidationError(
-                        "'global_settings.log_buffer_size' must be between 100 and 100000"
-                    )
-                global_settings.log_buffer_size = value
+    # Parse top-level global_settings as a fallback for products that don't
+    # define their own (backward-compatible with single-file configs).
+    default_settings_dict = config_dict.get("global_settings")
 
     # Validate global services (if present)
     global_services = []
@@ -119,7 +65,7 @@ def validate_configuration(config_dict: Dict[str, Any]) -> Configuration:
     for i, product_dict in enumerate(config_dict["products"]):
         try:
             product = _validate_product(
-                product_dict, i, global_services, global_settings
+                product_dict, i, global_services, default_settings_dict
             )
             products.append(product)
         except ValidationError as e:
@@ -129,9 +75,78 @@ def validate_configuration(config_dict: Dict[str, Any]) -> Configuration:
         raise ValidationError("\n".join(errors))
 
     from dagdi.output.themes import set_theme
-    set_theme(global_settings.theme)
+    first_theme = products[0].global_settings.theme if products else "default"
+    set_theme(first_theme)
 
-    return Configuration(products=products, services=global_services, global_settings=global_settings)
+    return Configuration(products=products, services=global_services)
+
+
+def _parse_global_settings(gs_dict: Any) -> GlobalSettings:
+    """Parse and validate a global_settings dict into a GlobalSettings object."""
+    settings = GlobalSettings()
+    if not isinstance(gs_dict, dict):
+        return settings
+
+    if "ssh_timeout" in gs_dict:
+        try:
+            settings.ssh_timeout = int(gs_dict["ssh_timeout"])
+        except (ValueError, TypeError):
+            raise ValidationError("'global_settings.ssh_timeout' must be an integer")
+
+    if "ssh_port" in gs_dict:
+        try:
+            settings.ssh_port = int(gs_dict["ssh_port"])
+        except (ValueError, TypeError):
+            raise ValidationError("'global_settings.ssh_port' must be an integer")
+        if settings.ssh_port < 1 or settings.ssh_port > 65535:
+            raise ValidationError(
+                "'global_settings.ssh_port' must be between 1 and 65535"
+            )
+
+    if "on_partial_failure" in gs_dict:
+        value = gs_dict["on_partial_failure"]
+        if value not in ("continue", "stop", "prompt"):
+            raise ValidationError(
+                f"'global_settings.on_partial_failure' must be 'continue', 'stop', or 'prompt', got '{value}'"
+            )
+        settings.on_partial_failure = value
+
+    if "live_status_table" in gs_dict:
+        value = gs_dict["live_status_table"]
+        if not isinstance(value, bool):
+            raise ValidationError("'global_settings.live_status_table' must be a boolean")
+        settings.live_status_table = value
+
+    if "theme" in gs_dict:
+        from dagdi.output.themes import AVAILABLE_THEMES
+        value = gs_dict["theme"]
+        if not isinstance(value, str) or value not in AVAILABLE_THEMES:
+            raise ValidationError(
+                f"'global_settings.theme' must be one of "
+                f"{', '.join(AVAILABLE_THEMES)}, got '{value}'"
+            )
+        settings.theme = value
+
+    if "minimal_status" in gs_dict:
+        value = gs_dict["minimal_status"]
+        if not isinstance(value, bool):
+            raise ValidationError("'global_settings.minimal_status' must be a boolean")
+        settings.minimal_status = value
+
+    if "log_buffer_size" in gs_dict:
+        try:
+            value = int(gs_dict["log_buffer_size"])
+        except (ValueError, TypeError):
+            raise ValidationError(
+                "'global_settings.log_buffer_size' must be an integer"
+            )
+        if value < 100 or value > 100000:
+            raise ValidationError(
+                "'global_settings.log_buffer_size' must be between 100 and 100000"
+            )
+        settings.log_buffer_size = value
+
+    return settings
 
 
 def _validate_global_services(services_list: Any) -> List[Service]:
@@ -226,40 +241,49 @@ def _validate_product(
     product_dict: Dict[str, Any],
     index: int,
     global_services: List[Service],
-    global_settings: GlobalSettings = GlobalSettings(),
+    default_settings_dict: Optional[Dict[str, Any]] = None,
 ) -> Product:
     """Validate a product dictionary."""
     if not isinstance(product_dict, dict):
         raise ValidationError(f"Product {index} must be a dictionary")
-    
+
     if "name" not in product_dict:
         raise ValidationError(f"Product {index} must have a 'name' field")
-    
+
     product_name = product_dict["name"]
     if not isinstance(product_name, str) or not product_name.strip():
         raise ValidationError(f"Product {index} name must be a non-empty string")
-    
+
     if "environments" not in product_dict:
         raise ValidationError(f"Product '{product_name}' must have 'environments' field")
-    
+
     if not isinstance(product_dict["environments"], list):
         raise ValidationError(f"Product '{product_name}' environments must be a list")
-    
+
     if len(product_dict["environments"]) == 0:
         raise ValidationError(f"Product '{product_name}' environments list cannot be empty")
-    
+
+    # Resolve product-level settings.  Product dict takes precedence over
+    # the top-level (default) settings dict.
+    gs_dict = product_dict.get("global_settings", default_settings_dict)
+    product_settings = _parse_global_settings(gs_dict) if gs_dict else GlobalSettings()
+
     # Validate environments
     environments = []
     for i, env_dict in enumerate(product_dict["environments"]):
         try:
             env = _validate_environment(
-                env_dict, i, product_name, global_services, global_settings
+                env_dict, i, product_name, global_services, product_settings
             )
             environments.append(env)
         except ValidationError as e:
             raise e
 
-    return Product(name=product_name, environments=environments)
+    return Product(
+        name=product_name,
+        environments=environments,
+        global_settings=product_settings,
+    )
 
 
 def _validate_environment(

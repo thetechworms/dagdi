@@ -26,7 +26,9 @@ global_settings:
   ssh_timeout: 30
   on_partial_failure: prompt
   live_status_table: false
+  minimal_status: false
   theme: default
+  log_buffer_size: 5000
 ```
 
 ## Environment Structure
@@ -141,7 +143,9 @@ global_settings:
   ssh_timeout: 30
   on_partial_failure: prompt
   live_status_table: false
+  minimal_status: false
   theme: default
+  log_buffer_size: 5000
 ```
 
 Semantics:
@@ -149,12 +153,15 @@ Semantics:
 - `ssh_timeout`: intended default timeout
 - `on_partial_failure`: intended failure policy
 - `live_status_table`: feature flag for progressive status-table updates while checks run
+- `minimal_status`: when `true`, status tables show only Server, Service, and Status columns (omits Type, PID, CPU, RAM, Since); the SSH status command is also simplified to only check service state
 - `theme`: color theme for CLI output (`default`, `light`, `dark`, `no_color`)
+- `log_buffer_size`: max lines kept per panel in split log view (range 100-100000)
 
 Implementation note:
 
-- Values are loaded/validated and visible in `show-settings`; runtime enforcement is partial in current code.
-- `theme` is fully enforced at runtime: all output colors and styles are driven by the selected theme.
+- `global_settings` can be defined per product or at the top level as a default. Per-product settings are carried through `ResolvedScope` and used by commands at runtime.
+- `live_status_table`, `minimal_status`, `log_buffer_size`, and `theme` are fully enforced at runtime.
+- `ssh_timeout` and `on_partial_failure` are loaded/validated and visible in `show-settings`; runtime enforcement is partial.
 
 ## Adapting Template to Real Infra
 
@@ -171,7 +178,10 @@ dagdi config validate
 
 ## Recommended File Strategy
 
-- Keep one product in one file to satisfy merge constraints.
+- A product can be split across multiple files (environments are merged), but `global_settings` must appear in at most one file per product.
 - For many products, create separate files like:
   - `~/.config/dagdi/dagdi-payments.yaml`
   - `~/.config/dagdi/dagdi-analytics.yaml`
+- For large products, you can split environments across files:
+  - `~/.config/dagdi/dagdi-payments-prod.yaml`
+  - `~/.config/dagdi/dagdi-payments-dev.yaml`

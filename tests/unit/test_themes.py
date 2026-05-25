@@ -161,7 +161,7 @@ class TestThemeValidation:
             "global_settings": {"theme": "dark"},
         }
         config = validate_configuration(config_dict)
-        assert config.global_settings.theme == "dark"
+        assert config.products[0].global_settings.theme == "dark"
         set_theme("default")
 
     def test_validator_rejects_invalid_theme(self):

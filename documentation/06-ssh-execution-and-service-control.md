@@ -117,9 +117,18 @@ Rules include:
 - systemd text inspection (`active: failed` / `failed`) => `FAILED`
 - docker text inspection (`up`, `exited`, `dead`)
 
+## Minimal Status Mode
+
+When `--minimal` is passed (or `global_settings.minimal_status` is `true`), the status command is simplified:
+
+- **systemd**: checks only `LoadState` and `systemctl status` output to determine service state — no PID, CPU, RAM, or cgroup metric collection
+- **docker**: checks only `docker inspect` state — no `docker stats` metrics
+
+This reduces SSH overhead and produces a compact status table with only Server, Service, and Status columns.
+
 ## Service Runtime Metrics
 
-For `status` on `systemd` services, Dagdi augments `systemctl status` with runtime markers:
+For `status` on `systemd` services (when not in minimal mode), Dagdi augments `systemctl status` with runtime markers:
 
 - PID: `MainPID`/`ExecMainPID` for operator reference
 - CPU: summed across processes in the service cgroup when available
@@ -175,6 +184,7 @@ small but worker processes hold most of the memory.
 - Service-scoped commands (`manage service`, `ms`, `mss`) only target servers
   that define the requested service, instead of failing unrelated hosts in the
   same environment
+- `mss` shows a single confirmation prompt for destructive actions across all services, and consolidates results into one table
 - Bulk actions (`mas`, `mss`) continue through targets/services and summarize failures
 - Commands generally exit non-zero for hard failures or all-target failure scenarios
 

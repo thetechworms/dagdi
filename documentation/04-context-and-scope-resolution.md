@@ -66,6 +66,7 @@ Output:
   - selected `servers`
   - optional matched `services`
   - `scope_type`
+  - `global_settings` (from the resolved product)
 
 ## Resolution Priority
 

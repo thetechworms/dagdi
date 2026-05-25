@@ -3,6 +3,8 @@
 import typer
 from typing import Optional
 
+from . import __version__
+
 from .commands.discovery import discovery_app
 from .commands.monitoring import top
 from .commands.service_management import (
@@ -36,9 +38,23 @@ app.add_typer(context_app, name="context", help="Manage context")
 app.add_typer(config_app, name="config", help="Manage configuration")
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"dagdi {__version__}")
+        raise typer.Exit()
+
+
 @app.callback()
 def main(
     ctx: typer.Context,
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-V",
+        help="Show version and exit",
+        callback=_version_callback,
+        is_eager=True,
+    ),
     timeout: Optional[int] = typer.Option(
         None,
         "--timeout",

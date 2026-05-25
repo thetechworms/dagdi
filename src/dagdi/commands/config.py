@@ -127,6 +127,7 @@ global_settings:
   ssh_port: 22                # Default SSH port for all servers (override per server)
   on_partial_failure: prompt  # Options: continue, stop, prompt
   live_status_table: false    # Feature flag: stream status table while checks run
+  minimal_status: false       # Show only status and since columns (omit type/pid/cpu/ram)
   theme: default              # Color theme: default, light, dark, no_color
   log_buffer_size: 5000       # Max lines kept per panel in split log view (100-100000)
 
@@ -174,6 +175,7 @@ global_settings:
 #     - continue: Continue with remaining targets
 #     - stop: Stop on first failure
 #   live_status_table: Enable live/incremental status table rendering (default: false)
+#   minimal_status: Show only status and since columns in service status (default: false)
 #   theme: Color theme for CLI output (default, light, dark, no_color)
 #   log_buffer_size: Max lines per panel in split log view (default: 5000, range: 100-100000)
 """
@@ -268,15 +270,17 @@ def show_settings() -> None:
         config = validate_configuration(merged)
         config = resolve_services(config)
         
-        # Display settings
-        settings = config.global_settings
-        typer.echo("Global Settings:")
-        typer.echo(f"  SSH Timeout: {settings.ssh_timeout} seconds")
-        typer.echo(f"  SSH Port: {settings.ssh_port}")
-        typer.echo(f"  On Partial Failure: {settings.on_partial_failure}")
-        typer.echo(f"  Live Status Table: {settings.live_status_table}")
-        typer.echo(f"  Theme: {settings.theme}")
-        typer.echo(f"  Log Buffer Size: {settings.log_buffer_size}")
+        # Display per-product settings
+        for product in config.products:
+            settings = product.global_settings
+            typer.echo(f"Product: {product.name}")
+            typer.echo(f"  SSH Timeout: {settings.ssh_timeout} seconds")
+            typer.echo(f"  SSH Port: {settings.ssh_port}")
+            typer.echo(f"  On Partial Failure: {settings.on_partial_failure}")
+            typer.echo(f"  Live Status Table: {settings.live_status_table}")
+            typer.echo(f"  Minimal Status: {settings.minimal_status}")
+            typer.echo(f"  Theme: {settings.theme}")
+            typer.echo(f"  Log Buffer Size: {settings.log_buffer_size}")
         
     except Exception as e:
         typer.echo(f"Error: {str(e)}", err=True)

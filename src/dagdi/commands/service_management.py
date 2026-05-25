@@ -130,6 +130,7 @@ def _execute_service_target(
     service_name: str,
     action: str,
     timeout: Optional[int] = None,
+    minimal: bool = False,
 ) -> Tuple[Optional[dict], Optional[dict]]:
     """Execute a service action for a single target server/ip pair."""
     server_obj, server_ip = target
@@ -149,6 +150,7 @@ def _execute_service_target(
                 service_obj,
                 server_type=server_obj.type,
                 use_sudo=server_obj.ssh_config.sudo,
+                minimal=minimal,
             )
         elif action == "start":
             cmd = CommandBuilder.get_start_command(
@@ -198,6 +200,7 @@ def _execute_service_targets_parallel(
     action: str,
     timeout: Optional[int] = None,
     status_ctx=None,
+    minimal: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Execute a service action across targets in parallel."""
     results: List[dict] = []
@@ -211,7 +214,7 @@ def _execute_service_targets_parallel(
             )
 
     def worker(target: Tuple[Any, str]) -> Tuple[Optional[dict], Optional[dict]]:
-        return _execute_service_target(target, service_name, action, timeout=timeout)
+        return _execute_service_target(target, service_name, action, timeout=timeout, minimal=minimal)
 
     for result, failure in parallel_map_ordered(
         target_ips, worker, on_complete=_on_complete if status_ctx else None
@@ -238,6 +241,7 @@ def _execute_all_services_for_target(
     action: str,
     services_by_target: Dict[Tuple[str, str], List[Service]],
     timeout: Optional[int] = None,
+    minimal: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Execute an action for all services on one target, sequentially per target."""
     server_obj, server_ip = target
@@ -251,6 +255,7 @@ def _execute_all_services_for_target(
             service_obj.name,
             action,
             timeout=timeout,
+            minimal=minimal,
         )
         if result:
             results.append(result)
@@ -265,6 +270,7 @@ def _execute_all_services_parallel(
     action: str,
     services_by_target: Dict[Tuple[str, str], List[Service]],
     timeout: Optional[int] = None,
+    minimal: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Execute an action for all services, parallelizing by target."""
     all_results: List[dict] = []
@@ -276,6 +282,7 @@ def _execute_all_services_parallel(
             action,
             services_by_target,
             timeout=timeout,
+            minimal=minimal,
         )
 
     for target_results, target_failures in parallel_map_ordered(target_ips, worker):
@@ -313,13 +320,30 @@ def _apply_monitor_change_highlights(results: List[dict], previous_values: dict)
     return highlighted_results, current_values
 
 
-def _build_status_command_with_metrics(service_obj: Service, server_type: str = "", use_sudo: bool = False) -> str:
+def _build_status_command_with_metrics(
+    service_obj: Service, server_type: str = "", use_sudo: bool = False, minimal: bool = False,
+) -> str:
     """Build status command with runtime metrics for supported service types."""
     os_type = (server_type or "").strip().lower()
     is_centos_like = "centos" in os_type or "rhel" in os_type or "rocky" in os_type or "alma" in os_type
 
     if service_obj.type == "systemd":
         service_name = shlex.quote(service_obj.name)
+
+        if minimal:
+            if is_centos_like:
+                load_state_expr = f"systemctl show -p LoadState {service_name} 2>/dev/null | sed 's/^LoadState=//' | tr -d '\\r' | xargs"
+            else:
+                load_state_expr = f"systemctl show -p LoadState --value {service_name} 2>/dev/null | tr -d '\\r' | xargs"
+            base_command = (
+                f"LOAD_STATE=$({load_state_expr}); "
+                "if [ \"$LOAD_STATE\" = \"not-found\" ]; then echo \"DAGDI_STATUS=NOT_FOUND\"; fi; "
+                f"systemctl status {service_name} --no-pager 2>/dev/null"
+            )
+            if use_sudo:
+                return f"sudo sh -c {shlex.quote(base_command)}"
+            return base_command
+
         if is_centos_like:
             load_state_expr = f"systemctl show -p LoadState {service_name} 2>/dev/null | sed 's/^LoadState=//' | tr -d '\\r' | xargs"
             since_expr = f"systemctl show -p ActiveEnterTimestamp {service_name} 2>/dev/null | sed 's/^ActiveEnterTimestamp=//' | xargs"
@@ -398,6 +422,20 @@ def _build_status_command_with_metrics(service_obj: Service, server_type: str = 
     if service_obj.type == "docker":
         container_name = service_obj.config.get("container_name", service_obj.name)
         container_name = shlex.quote(container_name)
+
+        if minimal:
+            docker_script = (
+                f"STATE=$(docker inspect -f '{{{{.State.Status}}}}' {container_name} 2>/dev/null | head -n 1 | tr -d '\\r' | xargs); "
+                "if [ -z \"$STATE\" ]; then "
+                "echo \"DAGDI_STATUS=NOT_FOUND\"; "
+                "else "
+                "echo \"DAGDI_DOCKER_STATE=$STATE\"; "
+                "fi"
+            )
+            if use_sudo:
+                return f"sudo sh -c {shlex.quote(docker_script)}"
+            return docker_script
+
         docker_script = (
             f"STATE=$(docker inspect -f '{{{{.State.Status}}}}' {container_name} 2>/dev/null | head -n 1 | tr -d '\\r' | xargs); "
             "if [ -z \"$STATE\" ]; then "
@@ -418,8 +456,6 @@ def _build_status_command_with_metrics(service_obj: Service, server_type: str = 
             "fi"
         )
         if use_sudo:
-            # Docker status uses command substitutions and shell conditionals;
-            # run the whole script as root to avoid false NOT_FOUND markers.
             return f"sudo sh -c {shlex.quote(docker_script)}"
         return docker_script
 
@@ -566,6 +602,9 @@ def service(
     monitor: bool = typer.Option(
         False, "--monitor", help="Continuously refresh status table (status action only)"
     ),
+    minimal: bool = typer.Option(
+        False, "--minimal", help="Show only status column in status output"
+    ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
     ),
@@ -616,6 +655,7 @@ def service(
         ip=ip,
         timeout=timeout,
         monitor=monitor,
+        minimal=minimal,
         on_failure=on_failure,
     )
 
@@ -663,6 +703,7 @@ def _execute_service_action(
     ip: Optional[str] = None,
     timeout: Optional[int] = None,
     monitor: bool = False,
+    minimal: bool = False,
     on_failure: Optional[str] = None,
     config=None,
 ) -> None:
@@ -705,17 +746,19 @@ def _execute_service_action(
             typer.echo("No servers found matching the specified scope.")
             raise typer.Exit(1)
 
+        use_minimal = minimal or scope.global_settings.minimal_status
+
         if action == "status" and monitor:
             from rich.live import Live
 
             _preflight_monitor_auth(target_ips)
             results, _ = _execute_service_targets_parallel(
-                target_ips, name, "status", timeout=timeout,
+                target_ips, name, "status", timeout=timeout, minimal=use_minimal,
             )
             previous_values: dict = {}
             display_results, previous_values = _apply_monitor_change_highlights(results, previous_values)
             live = Live(
-                _build_status_table("Service Status (Monitoring)", display_results),
+                _build_status_table("Service Status (Monitoring)", display_results, minimal=use_minimal),
                 refresh_per_second=4,
             )
             live.start()
@@ -723,10 +766,10 @@ def _execute_service_action(
                 while True:
                     _interruptible_sleep(2)
                     results, _ = _execute_service_targets_parallel(
-                        target_ips, name, "status", timeout=timeout,
+                        target_ips, name, "status", timeout=timeout, minimal=use_minimal,
                     )
                     display_results, previous_values = _apply_monitor_change_highlights(results, previous_values)
-                    live.update(_build_status_table("Service Status (Monitoring)", display_results))
+                    live.update(_build_status_table("Service Status (Monitoring)", display_results, minimal=use_minimal))
             except KeyboardInterrupt:
                 pass
             finally:
@@ -747,12 +790,12 @@ def _execute_service_action(
         results = []
         failures = []
         status_live = None
-        live_status_enabled = action == "status" and config.global_settings.live_status_table
+        live_status_enabled = action == "status" and scope.global_settings.live_status_table
 
         if live_status_enabled:
             from rich.live import Live
             status_live = Live(
-                _build_status_table("Service Status", results),
+                _build_status_table("Service Status", results, minimal=use_minimal),
                 refresh_per_second=6,
                 transient=False,
             )
@@ -761,9 +804,9 @@ def _execute_service_action(
         try:
             if live_status_enabled:
                 results, failures = _execute_service_targets_parallel(
-                    target_ips, name, action, timeout=timeout,
+                    target_ips, name, action, timeout=timeout, minimal=use_minimal,
                 )
-                status_live.update(_build_status_table("Service Status", results))
+                status_live.update(_build_status_table("Service Status", results, minimal=use_minimal))
             else:
                 total = len(target_ips)
                 with _progress_console.status(
@@ -772,6 +815,7 @@ def _execute_service_action(
                 ) as spin:
                     results, failures = _execute_service_targets_parallel(
                         target_ips, name, action, timeout=timeout, status_ctx=spin,
+                        minimal=use_minimal,
                     )
         finally:
             if status_live:
@@ -779,11 +823,11 @@ def _execute_service_action(
 
         # Display results
         formatter = Formatter()
-        
+
         if action == "status":
             # Render statically unless live table is enabled.
             if not live_status_enabled:
-                _display_status_results(results)
+                _display_status_results(results, minimal=use_minimal)
         else:
             # Display action results
             _display_action_results(results, action)
@@ -810,12 +854,12 @@ def _execute_service_action(
         raise typer.Exit(1)
 
 
-def _display_status_results(results: List[dict]) -> None:
+def _display_status_results(results: List[dict], minimal: bool = False) -> None:
     """Display service status results in table format."""
     from rich.console import Console
 
     console = Console()
-    console.print(_build_status_table("Service Status", results))
+    console.print(_build_status_table("Service Status", results, minimal=minimal))
 
 
 def _display_action_results(results: List[dict], action: str) -> None:
@@ -854,12 +898,12 @@ def _display_action_results(results: List[dict], action: str) -> None:
     console.print(table)
 
 
-def _display_consolidated_status(results: List[dict]) -> None:
+def _display_consolidated_status(results: List[dict], minimal: bool = False) -> None:
     """Display all service statuses in a single consolidated table."""
     from rich.console import Console
 
     console = Console()
-    console.print(_build_status_table("All Services Status", results))
+    console.print(_build_status_table("All Services Status", results, minimal=minimal))
 
 
 def _sort_results_by_server(results: List[dict]) -> List[dict]:
@@ -867,7 +911,7 @@ def _sort_results_by_server(results: List[dict]) -> List[dict]:
     return sorted(results, key=lambda r: r.get("server", ""))
 
 
-def _build_status_table(title: str, results: List[dict]):
+def _build_status_table(title: str, results: List[dict], minimal: bool = False):
     """Build a status table for static or live rendering."""
     from rich import box
     from rich.table import Table
@@ -876,11 +920,12 @@ def _build_status_table(title: str, results: List[dict]):
     table = Table(title=title, box=box.ROUNDED, show_lines=True)
     table.add_column("Server", style=t.col_server)
     table.add_column("Service", style=t.col_service)
-    table.add_column("Type", style=t.col_type)
-    table.add_column("PID", style=t.col_pid)
-    table.add_column("CPU", style=t.col_metric)
-    table.add_column("RAM", style=t.col_metric)
-    table.add_column("Since", style=t.col_since)
+    if not minimal:
+        table.add_column("Type", style=t.col_type)
+        table.add_column("PID", style=t.col_pid)
+        table.add_column("CPU", style=t.col_metric)
+        table.add_column("RAM", style=t.col_metric)
+        table.add_column("Since", style=t.col_since)
     table.add_column("Status")
 
     sorted_results = _sort_results_by_server(results)
@@ -899,27 +944,34 @@ def _build_status_table(title: str, results: List[dict]):
         if result.get("_status_changed"):
             status_text = styled(status_text, "bold")
 
-        cpu_val = result.get("cpu", "N/A")
-        ram_val = result.get("ram", "N/A")
-        if cpu_val in ("N/A", "-", ""):
-            cpu_display = styled(cpu_val, "label")
+        if minimal:
+            table.add_row(
+                server_label,
+                result["service"],
+                status_text,
+            )
         else:
-            cpu_display = str(cpu_val)
-        if ram_val in ("N/A", "-", ""):
-            ram_display = styled(ram_val, "label")
-        else:
-            ram_display = str(ram_val)
+            cpu_val = result.get("cpu", "N/A")
+            ram_val = result.get("ram", "N/A")
+            if cpu_val in ("N/A", "-", ""):
+                cpu_display = styled(cpu_val, "label")
+            else:
+                cpu_display = str(cpu_val)
+            if ram_val in ("N/A", "-", ""):
+                ram_display = styled(ram_val, "label")
+            else:
+                ram_display = str(ram_val)
 
-        table.add_row(
-            server_label,
-            result["service"],
-            result.get("service_type", "UNKNOWN"),
-            result.get("pid", "-"),
-            cpu_display,
-            ram_display,
-            result.get("since", "N/A"),
-            status_text,
-        )
+            table.add_row(
+                server_label,
+                result["service"],
+                result.get("service_type", "UNKNOWN"),
+                result.get("pid", "-"),
+                cpu_display,
+                ram_display,
+                result.get("since", "N/A"),
+                status_text,
+            )
 
     return table
 
@@ -980,6 +1032,9 @@ def manage_single_service(
     monitor: bool = typer.Option(
         False, "--monitor", help="Continuously refresh status table (status action only)"
     ),
+    minimal: bool = typer.Option(
+        False, "--minimal", help="Show only status column in status output"
+    ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
     ),
@@ -1028,6 +1083,7 @@ def manage_single_service(
         ip=ip,
         timeout=timeout,
         monitor=monitor,
+        minimal=minimal,
         on_failure=on_failure,
     )
 
@@ -1052,6 +1108,9 @@ def manage_multiple_services(
     monitor: bool = typer.Option(
         False, "--monitor", help="Continuously refresh status table (status action only)"
     ),
+    minimal: bool = typer.Option(
+        False, "--minimal", help="Show only status column in status output"
+    ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
     ),
@@ -1067,7 +1126,33 @@ def manage_multiple_services(
         dagdi mss nginx api stop
         dagdi mss nginx postgres start
     """
-    # Load config (needed for both interactive and non-interactive paths)
+    if services_and_action:
+        if len(services_and_action) < 2:
+            typer.echo("Error: Must provide at least one service name and an action", err=True)
+            raise typer.Exit(1)
+
+        action = services_and_action[-1]
+        service_names = services_and_action[:-1]
+
+        valid_actions = ["status", "start", "stop", "restart"]
+        if action not in valid_actions:
+            typer.echo(
+                f"Error: Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}",
+                err=True
+            )
+            raise typer.Exit(1)
+
+        if monitor and action != "status":
+            typer.echo(
+                "Error: --monitor can only be used with the 'status' action", err=True
+            )
+            raise typer.Exit(1)
+        if monitor and len(service_names) > 1:
+            typer.echo(
+                "Error: --monitor with mss supports one service at a time", err=True
+            )
+            raise typer.Exit(1)
+
     try:
         config = _load_config()
     except Exception as e:
@@ -1090,46 +1175,105 @@ def manage_multiple_services(
         action = select_action()
         if action is None:
             raise typer.Exit(0)
-    else:
-        if len(services_and_action) < 2:
-            typer.echo("Error: Must provide at least one service name and an action", err=True)
+
+        if monitor and action != "status":
+            typer.echo(
+                "Error: --monitor can only be used with the 'status' action", err=True
+            )
+            raise typer.Exit(1)
+        if monitor and len(service_names) > 1:
+            typer.echo(
+                "Error: --monitor with mss supports one service at a time", err=True
+            )
             raise typer.Exit(1)
 
-        action = services_and_action[-1]
-        service_names = services_and_action[:-1]
-
-    if monitor and action != "status":
-        typer.echo("Error: --monitor can only be used with the 'status' action", err=True)
-        raise typer.Exit(1)
-    if monitor and len(service_names) > 1:
-        typer.echo("Error: --monitor with mss supports one service at a time", err=True)
-        raise typer.Exit(1)
-
-    valid_actions = ["status", "start", "stop", "restart"]
-    if action not in valid_actions:
-        typer.echo(
-            f"Error: Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}",
-            err=True
-        )
-        raise typer.Exit(1)
-
-    for service_name in service_names:
-        typer.echo(f"\n{'='*60}")
-        typer.echo(f"Managing service: {service_name}")
-        typer.echo(f"{'='*60}")
-
+    if monitor:
         _execute_service_action(
-            name=service_name,
+            name=service_names[0],
             action=action,
             product=product,
             environment=environment,
             server=server,
             ip=ip,
             timeout=timeout,
-            monitor=monitor,
+            monitor=True,
+            minimal=minimal,
             on_failure=on_failure,
             config=config,
         )
+        return
+
+    current_context = get_context()
+
+    # Resolve once without a service filter to get product-level settings.
+    base_scope = resolve_scope(
+        config=config,
+        product=product or (current_context.get("product") if current_context else None),
+        environment=environment
+        or (current_context.get("environment") if current_context else None),
+        server=server,
+        ip=ip,
+    )
+    use_minimal = minimal or base_scope.global_settings.minimal_status
+
+    # Single confirmation for destructive actions across all services
+    if action in ["stop", "restart"]:
+        svc_list = ", ".join(service_names)
+        typer.echo(f"\n⚠️  About to {action} services: {svc_list}")
+        if not typer.confirm("Continue?"):
+            typer.echo("Cancelled.")
+            raise typer.Exit(0)
+
+    all_results: List[dict] = []
+    all_failures: List[dict] = []
+    auth_done = False
+
+    for svc_name in service_names:
+        scope = resolve_scope(
+            config=config,
+            product=product or (current_context.get("product") if current_context else None),
+            environment=environment
+            or (current_context.get("environment") if current_context else None),
+            server=server,
+            ip=ip,
+            service=svc_name,
+        )
+        target_ips = get_target_ips(scope.servers)
+        if not target_ips:
+            typer.echo(f"No servers found for service '{svc_name}', skipping.")
+            continue
+
+        if not auth_done:
+            _preflight_monitor_auth(target_ips)
+            auth_done = True
+
+        results, failures = _execute_service_targets_parallel(
+            target_ips, svc_name, action, timeout=timeout, minimal=use_minimal,
+        )
+        all_results.extend(results)
+        all_failures.extend(failures)
+
+    if action == "status":
+        _display_consolidated_status(all_results, minimal=use_minimal)
+    else:
+        _display_consolidated_action(all_results, action)
+
+    if all_failures:
+        typer.echo(f"\n⚠️  {len(all_failures)} target(s) failed:")
+        for failure in all_failures:
+            svc_info = failure.get("service", "unknown")
+            typer.echo(
+                f"  [{failure['server']} | {failure['ip']} | {svc_info}] {failure['error']}"
+            )
+
+    success_count = len([r for r in all_results if r.get("success", False)])
+    typer.echo(
+        f"\n✓ {action.capitalize()} completed on {success_count} target(s), "
+        f"{len(all_failures)} failed"
+    )
+
+    if all_failures and not all_results:
+        raise typer.Exit(1)
 
 
 def manage_all_services(
@@ -1149,6 +1293,9 @@ def manage_all_services(
     ),
     monitor: bool = typer.Option(
         False, "--monitor", help="Continuously refresh status table (status action only)"
+    ),
+    minimal: bool = typer.Option(
+        False, "--minimal", help="Show only status column in status output"
     ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
@@ -1207,6 +1354,8 @@ def manage_all_services(
             typer.echo("No services found in the specified scope.")
             raise typer.Exit(1)
 
+        use_minimal = minimal or scope.global_settings.minimal_status
+
         if action == "status" and monitor:
             target_ips = get_target_ips(scope.servers)
             services_by_target = _build_target_service_index(scope.servers)
@@ -1214,12 +1363,12 @@ def manage_all_services(
 
             _preflight_monitor_auth(target_ips)
             all_results, _ = _execute_all_services_parallel(
-                target_ips, "status", services_by_target, timeout=timeout,
+                target_ips, "status", services_by_target, timeout=timeout, minimal=use_minimal,
             )
             previous_values: dict = {}
             display_results, previous_values = _apply_monitor_change_highlights(all_results, previous_values)
             live = Live(
-                _build_status_table("All Services Status (Monitoring)", display_results),
+                _build_status_table("All Services Status (Monitoring)", display_results, minimal=use_minimal),
                 refresh_per_second=4,
             )
             live.start()
@@ -1227,10 +1376,10 @@ def manage_all_services(
                 while True:
                     _interruptible_sleep(2)
                     all_results, _ = _execute_all_services_parallel(
-                        target_ips, "status", services_by_target, timeout=timeout,
+                        target_ips, "status", services_by_target, timeout=timeout, minimal=use_minimal,
                     )
                     display_results, previous_values = _apply_monitor_change_highlights(all_results, previous_values)
-                    live.update(_build_status_table("All Services Status (Monitoring)", display_results))
+                    live.update(_build_status_table("All Services Status (Monitoring)", display_results, minimal=use_minimal))
             except KeyboardInterrupt:
                 pass
             finally:
@@ -1252,12 +1401,12 @@ def manage_all_services(
         all_results = []
         all_failures = []
         consolidated_status_live = None
-        live_status_enabled = action == "status" and config.global_settings.live_status_table
+        live_status_enabled = action == "status" and scope.global_settings.live_status_table
 
         if live_status_enabled:
             from rich.live import Live
             consolidated_status_live = Live(
-                _build_status_table("All Services Status", all_results),
+                _build_status_table("All Services Status", all_results, minimal=use_minimal),
                 refresh_per_second=6,
                 transient=False,
             )
@@ -1267,10 +1416,10 @@ def manage_all_services(
             services_by_target = _build_target_service_index(scope.servers)
             if live_status_enabled:
                 all_results, all_failures = _execute_all_services_parallel(
-                    target_ips, action, services_by_target, timeout=timeout,
+                    target_ips, action, services_by_target, timeout=timeout, minimal=use_minimal,
                 )
                 consolidated_status_live.update(
-                    _build_status_table("All Services Status", all_results)
+                    _build_status_table("All Services Status", all_results, minimal=use_minimal)
                 )
             else:
                 with _progress_console.status(
@@ -1282,7 +1431,7 @@ def manage_all_services(
                     spinner="dots",
                 ):
                     all_results, all_failures = _execute_all_services_parallel(
-                        target_ips, action, services_by_target, timeout=timeout,
+                        target_ips, action, services_by_target, timeout=timeout, minimal=use_minimal,
                     )
         finally:
             if consolidated_status_live:
@@ -1292,7 +1441,7 @@ def manage_all_services(
         if action == "status":
             # Render statically unless live table is enabled.
             if not live_status_enabled:
-                _display_consolidated_status(all_results)
+                _display_consolidated_status(all_results, minimal=use_minimal)
         else:
             _display_consolidated_action(all_results, action)
 

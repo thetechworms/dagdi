@@ -1,8 +1,8 @@
 """Command resolver for scope resolution and context application."""
 
 from typing import Optional, List, Tuple, Literal
-from dataclasses import dataclass
-from .models import Configuration, Server, Service
+from dataclasses import dataclass, field
+from .models import Configuration, GlobalSettings, Server, Service
 from .context import manager as context_manager
 from .context import validator as context_validator
 
@@ -15,7 +15,7 @@ class ResolverError(Exception):
 @dataclass
 class ResolvedScope:
     """Result of scope resolution."""
-    
+
     product: str
     environment: str
     servers: List[Server]
@@ -28,6 +28,7 @@ class ResolvedScope:
         "specific_service",
         "specific_service_on_server"
     ] = "all_servers"
+    global_settings: GlobalSettings = field(default_factory=GlobalSettings)
 
 
 def resolve_scope(
@@ -159,6 +160,7 @@ def resolve_scope(
         servers=servers,
         services=services,
         scope_type=scope_type,
+        global_settings=product_obj.global_settings,
     )
 
 

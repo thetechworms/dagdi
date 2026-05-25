@@ -592,7 +592,7 @@ class TestValidateConfiguration:
         
         result = validate_configuration(config)
         
-        assert result.global_settings.ssh_timeout == 60
+        assert result.products[0].global_settings.ssh_timeout == 60
     
     def test_validate_global_settings_on_partial_failure(self):
         """Should validate global settings on_partial_failure."""
@@ -621,7 +621,7 @@ class TestValidateConfiguration:
             }
             
             result = validate_configuration(config)
-            assert result.global_settings.on_partial_failure == value
+            assert result.products[0].global_settings.on_partial_failure == value
 
     def test_validate_global_settings_live_status_table(self):
         """Should validate global settings live_status_table."""
@@ -650,7 +650,7 @@ class TestValidateConfiguration:
             }
 
             result = validate_configuration(config)
-            assert result.global_settings.live_status_table == value
+            assert result.products[0].global_settings.live_status_table == value
 
     def test_validate_global_settings_live_status_table_invalid_type(self):
         """Should reject non-boolean global settings live_status_table."""
@@ -681,7 +681,66 @@ class TestValidateConfiguration:
             validate_configuration(config)
 
         assert "'global_settings.live_status_table' must be a boolean" in str(exc_info.value)
-    
+
+    def test_validate_global_settings_minimal_status(self):
+        """Should validate global settings minimal_status."""
+        for value in [True, False]:
+            config = {
+                "products": [
+                    {
+                        "name": "app",
+                        "environments": [
+                            {
+                                "name": "dev",
+                                "servers": [
+                                    {
+                                        "name": "web-1",
+                                        "type": "ubuntu",
+                                        "ips": ["10.0.1.10"]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "global_settings": {
+                    "minimal_status": value
+                }
+            }
+
+            result = validate_configuration(config)
+            assert result.products[0].global_settings.minimal_status == value
+
+    def test_validate_global_settings_minimal_status_invalid_type(self):
+        """Should reject non-boolean global settings minimal_status."""
+        config = {
+            "products": [
+                {
+                    "name": "app",
+                    "environments": [
+                        {
+                            "name": "dev",
+                            "servers": [
+                                {
+                                    "name": "web-1",
+                                    "type": "ubuntu",
+                                    "ips": ["10.0.1.10"]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "global_settings": {
+                "minimal_status": "yes"
+            }
+        }
+
+        with pytest.raises(ValidationError) as exc_info:
+            validate_configuration(config)
+
+        assert "'global_settings.minimal_status' must be a boolean" in str(exc_info.value)
+
     def test_validate_server_ssh_config(self):
         """Should validate server SSH configuration."""
         config = {
@@ -818,7 +877,7 @@ class TestValidateConfiguration:
         }
 
         result = validate_configuration(config)
-        assert result.global_settings.ssh_port == 2222
+        assert result.products[0].global_settings.ssh_port == 2222
 
     def test_validate_global_settings_ssh_port_invalid(self):
         """Should reject non-integer ssh_port."""
@@ -1012,7 +1071,7 @@ class TestValidateConfiguration:
         }
 
         result = validate_configuration(config)
-        assert result.global_settings.log_buffer_size == 10000
+        assert result.products[0].global_settings.log_buffer_size == 10000
 
     def test_validate_global_settings_log_buffer_size_invalid(self):
         """Should reject non-integer log_buffer_size."""

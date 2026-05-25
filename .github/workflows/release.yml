@@ -36,6 +36,20 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Stamp version from tag
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          python -c "
+          import pathlib, sys
+          v = sys.argv[1]
+          f = pathlib.Path('src/dagdi/__init__.py')
+          f.write_text(f'\"\"\"Dagdi CLI - Context-aware Linux CLI tool for managing distributed infrastructure.\"\"\"\n\n__version__ = \"{v}\"\n')
+          " "$VERSION"
+          echo "Stamped version: ${VERSION}"
+
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
