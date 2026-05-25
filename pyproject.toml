@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dagdi-cli"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Context-aware Linux CLI tool for managing distributed infrastructure"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -35,6 +35,9 @@ dev = [
 
 [project.scripts]
 dagdi = "dagdi.cli:cli"
+
+[tool.setuptools.dynamic]
+version = {attr = "dagdi.__version__"}
 
 [tool.setuptools]
 packages = ["dagdi"]
