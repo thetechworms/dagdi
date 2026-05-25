@@ -1067,7 +1067,33 @@ def manage_multiple_services(
         dagdi mss nginx api stop
         dagdi mss nginx postgres start
     """
-    # Load config (needed for both interactive and non-interactive paths)
+    if services_and_action:
+        if len(services_and_action) < 2:
+            typer.echo("Error: Must provide at least one service name and an action", err=True)
+            raise typer.Exit(1)
+
+        action = services_and_action[-1]
+        service_names = services_and_action[:-1]
+
+        valid_actions = ["status", "start", "stop", "restart"]
+        if action not in valid_actions:
+            typer.echo(
+                f"Error: Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}",
+                err=True
+            )
+            raise typer.Exit(1)
+
+        if monitor and action != "status":
+            typer.echo(
+                "Error: --monitor can only be used with the 'status' action", err=True
+            )
+            raise typer.Exit(1)
+        if monitor and len(service_names) > 1:
+            typer.echo(
+                "Error: --monitor with mss supports one service at a time", err=True
+            )
+            raise typer.Exit(1)
+
     try:
         config = _load_config()
     except Exception as e:
@@ -1090,28 +1116,17 @@ def manage_multiple_services(
         action = select_action()
         if action is None:
             raise typer.Exit(0)
-    else:
-        if len(services_and_action) < 2:
-            typer.echo("Error: Must provide at least one service name and an action", err=True)
+
+        if monitor and action != "status":
+            typer.echo(
+                "Error: --monitor can only be used with the 'status' action", err=True
+            )
             raise typer.Exit(1)
-
-        action = services_and_action[-1]
-        service_names = services_and_action[:-1]
-
-    if monitor and action != "status":
-        typer.echo("Error: --monitor can only be used with the 'status' action", err=True)
-        raise typer.Exit(1)
-    if monitor and len(service_names) > 1:
-        typer.echo("Error: --monitor with mss supports one service at a time", err=True)
-        raise typer.Exit(1)
-
-    valid_actions = ["status", "start", "stop", "restart"]
-    if action not in valid_actions:
-        typer.echo(
-            f"Error: Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}",
-            err=True
-        )
-        raise typer.Exit(1)
+        if monitor and len(service_names) > 1:
+            typer.echo(
+                "Error: --monitor with mss supports one service at a time", err=True
+            )
+            raise typer.Exit(1)
 
     for service_name in service_names:
         typer.echo(f"\n{'='*60}")
