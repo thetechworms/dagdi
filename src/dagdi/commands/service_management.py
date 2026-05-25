@@ -1128,23 +1128,80 @@ def manage_multiple_services(
             )
             raise typer.Exit(1)
 
-    for service_name in service_names:
-        typer.echo(f"\n{'='*60}")
-        typer.echo(f"Managing service: {service_name}")
-        typer.echo(f"{'='*60}")
-
+    if monitor:
         _execute_service_action(
-            name=service_name,
+            name=service_names[0],
             action=action,
             product=product,
             environment=environment,
             server=server,
             ip=ip,
             timeout=timeout,
-            monitor=monitor,
+            monitor=True,
             on_failure=on_failure,
             config=config,
         )
+        return
+
+    # Single confirmation for destructive actions across all services
+    if action in ["stop", "restart"]:
+        svc_list = ", ".join(service_names)
+        typer.echo(f"\n⚠️  About to {action} services: {svc_list}")
+        if not typer.confirm("Continue?"):
+            typer.echo("Cancelled.")
+            raise typer.Exit(0)
+
+    current_context = get_context()
+    all_results: List[dict] = []
+    all_failures: List[dict] = []
+    auth_done = False
+
+    for svc_name in service_names:
+        scope = resolve_scope(
+            config=config,
+            product=product or (current_context.get("product") if current_context else None),
+            environment=environment
+            or (current_context.get("environment") if current_context else None),
+            server=server,
+            ip=ip,
+            service=svc_name,
+        )
+        target_ips = get_target_ips(scope.servers)
+        if not target_ips:
+            typer.echo(f"No servers found for service '{svc_name}', skipping.")
+            continue
+
+        if not auth_done:
+            _preflight_monitor_auth(target_ips)
+            auth_done = True
+
+        results, failures = _execute_service_targets_parallel(
+            target_ips, svc_name, action, timeout=timeout,
+        )
+        all_results.extend(results)
+        all_failures.extend(failures)
+
+    if action == "status":
+        _display_consolidated_status(all_results)
+    else:
+        _display_consolidated_action(all_results, action)
+
+    if all_failures:
+        typer.echo(f"\n⚠️  {len(all_failures)} target(s) failed:")
+        for failure in all_failures:
+            svc_info = failure.get("service", "unknown")
+            typer.echo(
+                f"  [{failure['server']} | {failure['ip']} | {svc_info}] {failure['error']}"
+            )
+
+    success_count = len([r for r in all_results if r.get("success", False)])
+    typer.echo(
+        f"\n✓ {action.capitalize()} completed on {success_count} target(s), "
+        f"{len(all_failures)} failed"
+    )
+
+    if all_failures and not all_results:
+        raise typer.Exit(1)
 
 
 def manage_all_services(
