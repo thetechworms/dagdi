@@ -645,7 +645,7 @@ def logs(
             if layout == "split":
                 _display_split(
                     targets, line_queue, stop_event,
-                    buffer_size=config.global_settings.log_buffer_size,
+                    buffer_size=scope.global_settings.log_buffer_size,
                 )
             else:
                 _display_interleaved(targets, line_queue, stop_event)

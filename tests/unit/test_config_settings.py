@@ -40,8 +40,10 @@ class TestShowSettings:
         
         # Verify
         assert result.exit_code == 0
+        assert "Product: myapp" in result.stdout
         assert "SSH Timeout: 30 seconds" in result.stdout
         assert "SSH Port: 22" in result.stdout
         assert "On Partial Failure: prompt" in result.stdout
         assert "Live Status Table: False" in result.stdout
+        assert "Minimal Status: False" in result.stdout
         assert "Log Buffer Size: 5000" in result.stdout

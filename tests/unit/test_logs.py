@@ -430,8 +430,11 @@ class TestLogsCommand:
             ssh_config=ssh_config, services=[service],
         )
         config = Configuration(
-            products=[Product(name="myapp", environments=[Environment(name="dev", servers=[server])])],
-            global_settings=settings,
+            products=[Product(
+                name="myapp",
+                environments=[Environment(name="dev", servers=[server])],
+                global_settings=settings,
+            )],
         )
         self._setup_mocks(mock_load, mock_merge, mock_validate, mock_ctx, config, sample_context)
 

@@ -58,9 +58,10 @@ class Environment:
 @dataclass
 class Product:
     """Product definition containing environments."""
-    
+
     name: str
     environments: List[Environment] = field(default_factory=list)
+    global_settings: "GlobalSettings" = field(default_factory=lambda: GlobalSettings())
 
 
 @dataclass
@@ -73,6 +74,7 @@ class GlobalSettings:
     live_status_table: bool = False
     theme: str = "default"
     log_buffer_size: int = 5000
+    minimal_status: bool = False
 
 
 @dataclass

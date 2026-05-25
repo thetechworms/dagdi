@@ -5,7 +5,7 @@ import time
 import pytest
 from unittest.mock import Mock, patch
 from src.dagdi.commands.service_management import (
-    service, _parse_service_status, _parse_service_metrics, _display_status_results, _display_action_results, _display_consolidated_status, _build_status_command_with_metrics, _format_memory_bytes
+    service, _parse_service_status, _parse_service_metrics, _display_status_results, _display_action_results, _display_consolidated_status, _build_status_command_with_metrics, _format_memory_bytes, _build_status_table
 )
 from src.dagdi.models import (
     Configuration, Product, Environment, Server, Service, SSHConfig, Context, ExecutionResult
@@ -531,3 +531,51 @@ class TestBuildStatusCommandWithMetrics:
 
         assert command.startswith("sudo sh -c ")
         assert "DAGDI_DOCKER_STATE=$STATE" in command
+
+
+class TestBuildStatusTable:
+    """Tests for _build_status_table with minimal mode."""
+
+    def _sample_results(self):
+        return [
+            {
+                "server": "web-1",
+                "ip": "10.0.1.10",
+                "service": "nginx",
+                "service_type": "systemd",
+                "pid": "1234",
+                "cpu": "2.5%",
+                "ram": "128.0MB",
+                "since": "Mon 2026-01-15 10:00:00 UTC",
+                "status": "RUNNING",
+                "success": True,
+            }
+        ]
+
+    def test_full_table_has_all_columns(self):
+        table = _build_status_table("Test", self._sample_results(), minimal=False)
+        col_names = [c.header for c in table.columns]
+        assert "Type" in col_names
+        assert "PID" in col_names
+        assert "CPU" in col_names
+        assert "RAM" in col_names
+        assert "Since" in col_names
+        assert "Status" in col_names
+
+    def test_minimal_table_omits_detail_columns(self):
+        table = _build_status_table("Test", self._sample_results(), minimal=True)
+        col_names = [c.header for c in table.columns]
+        assert "Type" not in col_names
+        assert "PID" not in col_names
+        assert "CPU" not in col_names
+        assert "RAM" not in col_names
+        assert "Server" in col_names
+        assert "Service" in col_names
+        assert "Since" in col_names
+        assert "Status" in col_names
+
+    def test_minimal_table_row_count_matches(self):
+        results = self._sample_results()
+        table_full = _build_status_table("Full", results, minimal=False)
+        table_min = _build_status_table("Min", results, minimal=True)
+        assert table_full.row_count == table_min.row_count

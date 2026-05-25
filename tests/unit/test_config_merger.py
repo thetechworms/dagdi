@@ -275,8 +275,8 @@ class TestMergeConfigurations:
         assert "config/dagdi-app-dev.yaml" in message
         assert "config/dagdi-app-dev2.yaml" in message
     
-    def test_global_settings_from_single_file(self):
-        """Should accept global_settings when defined in exactly one file."""
+    def test_global_settings_embedded_in_product(self):
+        """Should embed file's global_settings into its product."""
         configs = [
             {
                 "products": [{"name": "app", "environments": []}],
@@ -289,65 +289,45 @@ class TestMergeConfigurations:
 
         merged = merge_configurations(configs)
 
-        assert merged["global_settings"]["ssh_timeout"] == 30
-        assert merged["global_settings"]["on_partial_failure"] == "continue"
+        app = next(p for p in merged["products"] if p["name"] == "app")
+        db = next(p for p in merged["products"] if p["name"] == "db")
+        assert app["global_settings"]["ssh_timeout"] == 30
+        assert app["global_settings"]["on_partial_failure"] == "continue"
+        assert "global_settings" not in db
 
-    def test_global_settings_multiple_files_no_standalone_raises_error(self):
-        """Should error when multiple non-dedicated files define global_settings."""
+    def test_different_products_different_settings(self):
+        """Should allow different products in different files to each have global_settings."""
         configs = [
             {
-                "__dagdi_source_file": "config/dagdi-app-dev.yaml",
+                "__dagdi_source_file": "config/dagdi-app.yaml",
                 "products": [{"name": "app", "environments": []}],
                 "global_settings": {"ssh_timeout": 30}
             },
             {
-                "__dagdi_source_file": "config/dagdi-app-prod.yaml",
+                "__dagdi_source_file": "config/dagdi-db.yaml",
                 "products": [{"name": "db", "environments": []}],
-                "global_settings": {"on_partial_failure": "continue"}
-            }
-        ]
-
-        with pytest.raises(MergeError) as exc_info:
-            merge_configurations(configs)
-
-        message = str(exc_info.value)
-        assert "global_settings found in multiple files" in message
-        assert "dedicated file" in message
-
-    def test_global_settings_standalone_file_takes_precedence(self, capsys):
-        """Should use dedicated settings file and warn when others also define it."""
-        configs = [
-            {
-                "__dagdi_source_file": "config/dagdi-app-globalSettings.yaml",
-                "products": [],
-                "global_settings": {"ssh_timeout": 60, "theme": "dark"}
-            },
-            {
-                "__dagdi_source_file": "config/dagdi-app-dev.yaml",
-                "products": [{"name": "app", "environments": []}],
-                "global_settings": {"ssh_timeout": 10}
+                "global_settings": {"ssh_timeout": 60}
             }
         ]
 
         merged = merge_configurations(configs)
 
-        assert merged["global_settings"]["ssh_timeout"] == 60
-        assert merged["global_settings"]["theme"] == "dark"
-        captured = capsys.readouterr()
-        assert "dagdi-app-globalSettings.yaml" in captured.err
-        assert "dagdi-app-dev.yaml" in captured.err
+        app = next(p for p in merged["products"] if p["name"] == "app")
+        db = next(p for p in merged["products"] if p["name"] == "db")
+        assert app["global_settings"]["ssh_timeout"] == 30
+        assert db["global_settings"]["ssh_timeout"] == 60
 
-    def test_global_settings_multiple_standalone_files_raises_error(self):
-        """Should error when multiple dedicated settings files exist."""
+    def test_split_product_settings_conflict_raises_error(self):
+        """Should error when a product split across files has global_settings in both."""
         configs = [
             {
-                "__dagdi_source_file": "config/dagdi-globalSettings.yaml",
-                "products": [],
+                "__dagdi_source_file": "config/dagdi-app-dev.yaml",
+                "products": [{"name": "app", "environments": [{"name": "dev", "servers": []}]}],
                 "global_settings": {"ssh_timeout": 30}
             },
             {
-                "__dagdi_source_file": "config/dagdi-app-globalSettings.yaml",
-                "products": [],
+                "__dagdi_source_file": "config/dagdi-app-prod.yaml",
+                "products": [{"name": "app", "environments": [{"name": "prod", "servers": []}]}],
                 "global_settings": {"ssh_timeout": 60}
             }
         ]
@@ -356,10 +336,30 @@ class TestMergeConfigurations:
             merge_configurations(configs)
 
         message = str(exc_info.value)
-        assert "multiple dedicated settings files" in message
+        assert "global_settings for product 'app'" in message
+        assert "multiple files" in message
+
+    def test_split_product_settings_in_one_file_ok(self):
+        """Should allow split product with global_settings in only one file."""
+        configs = [
+            {
+                "__dagdi_source_file": "config/dagdi-app-dev.yaml",
+                "products": [{"name": "app", "environments": [{"name": "dev", "servers": []}]}],
+                "global_settings": {"ssh_timeout": 45}
+            },
+            {
+                "__dagdi_source_file": "config/dagdi-app-prod.yaml",
+                "products": [{"name": "app", "environments": [{"name": "prod", "servers": []}]}],
+            }
+        ]
+
+        merged = merge_configurations(configs)
+
+        app = merged["products"][0]
+        assert app["global_settings"]["ssh_timeout"] == 45
 
     def test_no_global_settings_in_any_file(self):
-        """Should produce empty global_settings when no file defines it."""
+        """Products without global_settings should not have the key."""
         configs = [
             {"products": [{"name": "app", "environments": []}]},
             {"products": [{"name": "db", "environments": []}]}
@@ -367,7 +367,8 @@ class TestMergeConfigurations:
 
         merged = merge_configurations(configs)
 
-        assert merged["global_settings"] == {}
+        for product in merged["products"]:
+            assert "global_settings" not in product
 
     def test_merge_empty_configurations(self):
         """Should handle empty configurations."""
