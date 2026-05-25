@@ -547,8 +547,8 @@ def logs(
     timeout: Optional[int] = typer.Option(
         None, "--timeout", help="SSH timeout in seconds"
     ),
-    layout: str = typer.Option(
-        "interleaved", "--layout", help="Display layout: interleaved or split"
+    layout: Optional[str] = typer.Option(
+        None, "--layout", help="Display layout: interleaved or split (default from global_settings)"
     ),
 ) -> None:
     """Stream logs from one or more services.
@@ -556,19 +556,12 @@ def logs(
     Examples:
         dagdi logs                              # Interactive service selection
         dagdi logs nginx                        # Single service
-        dagdi logs nginx api                    # Multiple services (interleaved)
-        dagdi logs nginx api --layout split     # Multiple services (split panels)
+        dagdi logs nginx api                    # Multiple services (split by default)
+        dagdi logs nginx api --layout interleaved  # Multiple services (interleaved)
         dagdi logs nginx -p app -e prod         # With product and environment
         dagdi logs nginx --server web-1         # From specific server
     """
     try:
-        if layout not in ("interleaved", "split"):
-            typer.echo(
-                f"Error: Invalid layout '{layout}'. Must be 'interleaved' or 'split'",
-                err=True,
-            )
-            raise typer.Exit(1)
-
         # Load configuration
         yaml_configs = load_all_configurations()
         merged_config = merge_configurations(yaml_configs)
@@ -586,6 +579,16 @@ def logs(
             server=server,
             ip=ip,
         )
+
+        # Resolve layout: CLI flag > global_settings > "split"
+        if layout is None:
+            layout = scope.global_settings.log_layout
+        if layout not in ("interleaved", "split"):
+            typer.echo(
+                f"Error: Invalid layout '{layout}'. Must be 'interleaved' or 'split'",
+                err=True,
+            )
+            raise typer.Exit(1)
 
         # Interactive selection when no services specified
         if not service_names:

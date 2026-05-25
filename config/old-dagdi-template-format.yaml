@@ -173,6 +173,9 @@ global_settings:
   log_buffer_size: 5000
   # Max lines kept per panel in split log view (range: 100-100000)
 
+  log_layout: split
+  # Default log display layout: interleaved or split
+
 # NOTES:
 # - Services are defined inline with each server
 # - Same service (e.g., nginx) is repeated in multiple places

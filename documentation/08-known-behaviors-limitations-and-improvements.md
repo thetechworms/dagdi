@@ -7,7 +7,7 @@ This section records implementation-accurate behavior that operators and contrib
 ## 1) `global_settings` are per-product and carried through scope resolution
 
 - Each product can have its own `global_settings`; a top-level `global_settings` serves as default for products that don't define their own.
-- `ResolvedScope` carries the resolved product's `global_settings`, so commands can read `live_status_table`, `minimal_status`, `log_buffer_size`, and `theme` directly from the scope.
+- `ResolvedScope` carries the resolved product's `global_settings`, so commands can read `live_status_table`, `minimal_status`, `log_buffer_size`, `log_layout`, and `theme` directly from the scope.
 - `ssh_timeout` and `on_partial_failure` are loaded and shown by `config show-settings` but command modules still mostly rely on command options (`--timeout`) rather than auto-applying them.
 
 ## 2) `--on-failure` is accepted in several commands but policy control is minimal
@@ -51,7 +51,7 @@ This section records implementation-accurate behavior that operators and contrib
 - All CLI output colors are driven through `output/themes.py` semantic roles (`styled()`, `get_theme()`).
 - Available themes: `default`, `light`, `dark`, `no_color`.
 - Use `no_color` for terminals with ANSI rendering issues or CI pipelines.
-- Unlike `ssh_timeout`/`on_partial_failure`, `theme`, `live_status_table`, `minimal_status`, and `log_buffer_size` are immediately active via per-product settings on `ResolvedScope`.
+- Unlike `ssh_timeout`/`on_partial_failure`, `theme`, `live_status_table`, `minimal_status`, `log_buffer_size`, and `log_layout` are immediately active via per-product settings on `ResolvedScope`.
 
 ## Suggested Improvement Backlog
 

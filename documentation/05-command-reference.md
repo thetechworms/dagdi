@@ -43,6 +43,7 @@ Prints global settings for each product:
 - `Minimal Status`
 - `Theme`
 - `Log Buffer Size`
+- `Log Layout`
 
 ## Context Commands
 
@@ -234,6 +235,7 @@ Options:
 - `-p/--product`, `-e/--environment`
 - `--server`, `--ip`
 - `--timeout`
+- `--layout` — display layout: `interleaved` or `split` (default from `global_settings.log_layout`, which defaults to `split`)
 
 Behavior:
 
@@ -286,6 +288,7 @@ dagdi mas status
 
 # Logs
 dagdi logs nginx
+dagdi logs nginx api --layout interleaved
 dagdi logs api --server web-1
 
 # SSH

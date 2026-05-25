@@ -133,6 +133,16 @@ def _parse_global_settings(gs_dict: Any) -> GlobalSettings:
             raise ValidationError("'global_settings.minimal_status' must be a boolean")
         settings.minimal_status = value
 
+    if "log_layout" in gs_dict:
+        value = gs_dict["log_layout"]
+        valid_layouts = ("interleaved", "split")
+        if not isinstance(value, str) or value not in valid_layouts:
+            raise ValidationError(
+                f"'global_settings.log_layout' must be one of "
+                f"{', '.join(valid_layouts)}, got '{value}'"
+            )
+        settings.log_layout = value
+
     if "log_buffer_size" in gs_dict:
         try:
             value = int(gs_dict["log_buffer_size"])

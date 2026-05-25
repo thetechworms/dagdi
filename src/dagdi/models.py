@@ -74,6 +74,7 @@ class GlobalSettings:
     live_status_table: bool = False
     theme: str = "default"
     log_buffer_size: int = 5000
+    log_layout: Literal["interleaved", "split"] = "split"
     minimal_status: bool = False
 
 

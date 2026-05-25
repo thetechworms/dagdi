@@ -85,6 +85,7 @@ global_settings:                            # optional (per-product or top-level
   minimal_status: <true|false>              # default: false
   theme: <default|light|dark|no_color>      # default: default
   log_buffer_size: <int>                    # default: 5000, range 100-100000
+  log_layout: <interleaved|split>           # default: split
 ```
 
 ## Required vs Optional
@@ -229,6 +230,7 @@ Available settings:
   - `dark` — high-contrast bright colors for dark terminals
   - `no_color` — disables all color/styling (useful for terminals with ANSI issues or CI pipelines)
 - `log_buffer_size` — max lines kept per panel in split log view (range 100-100000, default 5000)
+- `log_layout` — default log display layout: `interleaved` (merged single stream) or `split` (per-service scrollable panels). Overridable via `--layout` CLI flag. Default: `split`
 
 ## Production-Friendly Config Tips
 
@@ -270,4 +272,5 @@ global_settings:
   minimal_status: false
   theme: default
   log_buffer_size: 5000
+  log_layout: split
 ```

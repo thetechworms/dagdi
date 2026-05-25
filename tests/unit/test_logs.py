@@ -255,7 +255,7 @@ class TestLogsCommand:
         mock_validate.return_value = config
         mock_ctx.return_value = context
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.warm_up_connection')
     @patch('dagdi.ssh.executor._is_local_target', return_value=False)
@@ -282,7 +282,7 @@ class TestLogsCommand:
         assert len(targets) == 1
         assert targets[0].service.name == "nginx"
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.warm_up_connection')
     @patch('dagdi.ssh.executor._is_local_target', return_value=False)
@@ -311,7 +311,7 @@ class TestLogsCommand:
         assert "nginx" in service_names
         assert "api" in service_names
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.warm_up_connection')
     @patch('dagdi.ssh.executor._is_local_target', return_value=False)
@@ -338,7 +338,7 @@ class TestLogsCommand:
         assert len(targets) == 1
         assert targets[0].server.name == "web-1"
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.warm_up_connection')
     @patch('dagdi.ssh.executor._is_local_target', return_value=False)
@@ -458,7 +458,7 @@ class TestLogsCommand:
 
         assert result.exit_code != 0
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.validate_sudo_auth')
     @patch('dagdi.ssh.executor.prepare_sudo_auth')
@@ -495,7 +495,7 @@ class TestLogsCommand:
         targets = mock_start.call_args[0][0]
         assert targets[0].command == "sudo journalctl -u nginx -f"
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.validate_sudo_auth')
     @patch('dagdi.ssh.executor.prepare_sudo_auth')
@@ -532,7 +532,7 @@ class TestLogsCommand:
         targets = mock_start.call_args[0][0]
         assert targets[0].command == "journalctl -u nginx -f"
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.warm_up_connection')
     @patch('dagdi.ssh.executor._is_local_target', return_value=False)
@@ -561,7 +561,7 @@ class TestLogsCommand:
         assert ("web-2", "nginx") in pairs
         assert ("db-1", "pg-main") in pairs
 
-    @patch('src.dagdi.commands.logs._display_interleaved')
+    @patch('src.dagdi.commands.logs._display_split')
     @patch('src.dagdi.commands.logs._start_stream_threads', return_value=[])
     @patch('dagdi.ssh.executor.warm_up_connection')
     @patch('dagdi.ssh.executor._is_local_target', return_value=False)

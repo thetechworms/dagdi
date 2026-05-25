@@ -29,6 +29,7 @@ global_settings:
   minimal_status: false
   theme: default
   log_buffer_size: 5000
+  log_layout: split
 ```
 
 ## Environment Structure
@@ -146,6 +147,7 @@ global_settings:
   minimal_status: false
   theme: default
   log_buffer_size: 5000
+  log_layout: split
 ```
 
 Semantics:
@@ -156,11 +158,12 @@ Semantics:
 - `minimal_status`: when `true`, status tables show only Server, Service, and Status columns (omits Type, PID, CPU, RAM, Since); the SSH status command is also simplified to only check service state
 - `theme`: color theme for CLI output (`default`, `light`, `dark`, `no_color`)
 - `log_buffer_size`: max lines kept per panel in split log view (range 100-100000)
+- `log_layout`: default display layout for `dagdi logs` — `interleaved` (merged stream) or `split` (per-service panels). Default: `split`. Overridable via `--layout` CLI flag
 
 Implementation note:
 
 - `global_settings` can be defined per product or at the top level as a default. Per-product settings are carried through `ResolvedScope` and used by commands at runtime.
-- `live_status_table`, `minimal_status`, `log_buffer_size`, and `theme` are fully enforced at runtime.
+- `live_status_table`, `minimal_status`, `log_buffer_size`, `log_layout`, and `theme` are fully enforced at runtime.
 - `ssh_timeout` and `on_partial_failure` are loaded/validated and visible in `show-settings`; runtime enforcement is partial.
 
 ## Adapting Template to Real Infra

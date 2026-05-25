@@ -80,6 +80,7 @@ For most operational commands, the flow is:
     - `minimal_status=false`
     - `theme=default`
     - `log_buffer_size=5000`
+    - `log_layout=split`
 - Each product carries its own `GlobalSettings` instance; top-level `global_settings` acts as a default for products that don't define their own
 - Activates the configured theme via `set_theme()` (uses the first product's theme)
 

@@ -130,6 +130,7 @@ global_settings:
   minimal_status: false       # Show only status and since columns (omit type/pid/cpu/ram)
   theme: default              # Color theme: default, light, dark, no_color
   log_buffer_size: 5000       # Max lines kept per panel in split log view (100-100000)
+  log_layout: split           # Default log display layout: interleaved or split
 
 # Configuration Guide:
 # 
@@ -178,6 +179,7 @@ global_settings:
 #   minimal_status: Show only status and since columns in service status (default: false)
 #   theme: Color theme for CLI output (default, light, dark, no_color)
 #   log_buffer_size: Max lines per panel in split log view (default: 5000, range: 100-100000)
+#   log_layout: Default log display layout (interleaved or split, default: split)
 """
 
 
@@ -281,6 +283,7 @@ def show_settings() -> None:
             typer.echo(f"  Minimal Status: {settings.minimal_status}")
             typer.echo(f"  Theme: {settings.theme}")
             typer.echo(f"  Log Buffer Size: {settings.log_buffer_size}")
+            typer.echo(f"  Log Layout: {settings.log_layout}")
         
     except Exception as e:
         typer.echo(f"Error: {str(e)}", err=True)

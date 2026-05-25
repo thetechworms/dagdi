@@ -51,3 +51,4 @@ global_settings:
   minimal_status: false
   theme: default
   log_buffer_size: 5000
+  log_layout: split
