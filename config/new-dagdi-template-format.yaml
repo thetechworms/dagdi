@@ -231,8 +231,14 @@ global_settings:
   live_status_table: true
   # Show live updating status table in monitoring commands
 
+  minimal_status: false
+  # Show only status column in service status output (omit type/pid/cpu/ram)
+
   theme: default
   # Color theme for CLI output: default, light, dark, no_color
+
+  log_buffer_size: 5000
+  # Max lines kept per panel in split log view (range: 100-100000)
 
 # BENEFITS OF THIS FORMAT:
 # - Services defined once (6 services)

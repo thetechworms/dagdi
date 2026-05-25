@@ -48,4 +48,6 @@ global_settings:
   ssh_port: 22
   on_partial_failure: prompt
   live_status_table: true
+  minimal_status: false
   theme: default
+  log_buffer_size: 5000
