@@ -130,6 +130,7 @@ def _execute_service_target(
     service_name: str,
     action: str,
     timeout: Optional[int] = None,
+    minimal: bool = False,
 ) -> Tuple[Optional[dict], Optional[dict]]:
     """Execute a service action for a single target server/ip pair."""
     server_obj, server_ip = target
@@ -149,6 +150,7 @@ def _execute_service_target(
                 service_obj,
                 server_type=server_obj.type,
                 use_sudo=server_obj.ssh_config.sudo,
+                minimal=minimal,
             )
         elif action == "start":
             cmd = CommandBuilder.get_start_command(
@@ -198,6 +200,7 @@ def _execute_service_targets_parallel(
     action: str,
     timeout: Optional[int] = None,
     status_ctx=None,
+    minimal: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Execute a service action across targets in parallel."""
     results: List[dict] = []
@@ -211,7 +214,7 @@ def _execute_service_targets_parallel(
             )
 
     def worker(target: Tuple[Any, str]) -> Tuple[Optional[dict], Optional[dict]]:
-        return _execute_service_target(target, service_name, action, timeout=timeout)
+        return _execute_service_target(target, service_name, action, timeout=timeout, minimal=minimal)
 
     for result, failure in parallel_map_ordered(
         target_ips, worker, on_complete=_on_complete if status_ctx else None
@@ -238,6 +241,7 @@ def _execute_all_services_for_target(
     action: str,
     services_by_target: Dict[Tuple[str, str], List[Service]],
     timeout: Optional[int] = None,
+    minimal: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Execute an action for all services on one target, sequentially per target."""
     server_obj, server_ip = target
@@ -251,6 +255,7 @@ def _execute_all_services_for_target(
             service_obj.name,
             action,
             timeout=timeout,
+            minimal=minimal,
         )
         if result:
             results.append(result)
@@ -265,6 +270,7 @@ def _execute_all_services_parallel(
     action: str,
     services_by_target: Dict[Tuple[str, str], List[Service]],
     timeout: Optional[int] = None,
+    minimal: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Execute an action for all services, parallelizing by target."""
     all_results: List[dict] = []
@@ -276,6 +282,7 @@ def _execute_all_services_parallel(
             action,
             services_by_target,
             timeout=timeout,
+            minimal=minimal,
         )
 
     for target_results, target_failures in parallel_map_ordered(target_ips, worker):
@@ -313,13 +320,30 @@ def _apply_monitor_change_highlights(results: List[dict], previous_values: dict)
     return highlighted_results, current_values
 
 
-def _build_status_command_with_metrics(service_obj: Service, server_type: str = "", use_sudo: bool = False) -> str:
+def _build_status_command_with_metrics(
+    service_obj: Service, server_type: str = "", use_sudo: bool = False, minimal: bool = False,
+) -> str:
     """Build status command with runtime metrics for supported service types."""
     os_type = (server_type or "").strip().lower()
     is_centos_like = "centos" in os_type or "rhel" in os_type or "rocky" in os_type or "alma" in os_type
 
     if service_obj.type == "systemd":
         service_name = shlex.quote(service_obj.name)
+
+        if minimal:
+            if is_centos_like:
+                load_state_expr = f"systemctl show -p LoadState {service_name} 2>/dev/null | sed 's/^LoadState=//' | tr -d '\\r' | xargs"
+            else:
+                load_state_expr = f"systemctl show -p LoadState --value {service_name} 2>/dev/null | tr -d '\\r' | xargs"
+            base_command = (
+                f"LOAD_STATE=$({load_state_expr}); "
+                "if [ \"$LOAD_STATE\" = \"not-found\" ]; then echo \"DAGDI_STATUS=NOT_FOUND\"; fi; "
+                f"systemctl status {service_name} --no-pager 2>/dev/null"
+            )
+            if use_sudo:
+                return f"sudo sh -c {shlex.quote(base_command)}"
+            return base_command
+
         if is_centos_like:
             load_state_expr = f"systemctl show -p LoadState {service_name} 2>/dev/null | sed 's/^LoadState=//' | tr -d '\\r' | xargs"
             since_expr = f"systemctl show -p ActiveEnterTimestamp {service_name} 2>/dev/null | sed 's/^ActiveEnterTimestamp=//' | xargs"
@@ -398,6 +422,20 @@ def _build_status_command_with_metrics(service_obj: Service, server_type: str = 
     if service_obj.type == "docker":
         container_name = service_obj.config.get("container_name", service_obj.name)
         container_name = shlex.quote(container_name)
+
+        if minimal:
+            docker_script = (
+                f"STATE=$(docker inspect -f '{{{{.State.Status}}}}' {container_name} 2>/dev/null | head -n 1 | tr -d '\\r' | xargs); "
+                "if [ -z \"$STATE\" ]; then "
+                "echo \"DAGDI_STATUS=NOT_FOUND\"; "
+                "else "
+                "echo \"DAGDI_DOCKER_STATE=$STATE\"; "
+                "fi"
+            )
+            if use_sudo:
+                return f"sudo sh -c {shlex.quote(docker_script)}"
+            return docker_script
+
         docker_script = (
             f"STATE=$(docker inspect -f '{{{{.State.Status}}}}' {container_name} 2>/dev/null | head -n 1 | tr -d '\\r' | xargs); "
             "if [ -z \"$STATE\" ]; then "
@@ -418,8 +456,6 @@ def _build_status_command_with_metrics(service_obj: Service, server_type: str = 
             "fi"
         )
         if use_sudo:
-            # Docker status uses command substitutions and shell conditionals;
-            # run the whole script as root to avoid false NOT_FOUND markers.
             return f"sudo sh -c {shlex.quote(docker_script)}"
         return docker_script
 
@@ -567,7 +603,7 @@ def service(
         False, "--monitor", help="Continuously refresh status table (status action only)"
     ),
     minimal: bool = typer.Option(
-        False, "--minimal", help="Show only status and since columns in status output"
+        False, "--minimal", help="Show only status column in status output"
     ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
@@ -717,7 +753,7 @@ def _execute_service_action(
 
             _preflight_monitor_auth(target_ips)
             results, _ = _execute_service_targets_parallel(
-                target_ips, name, "status", timeout=timeout,
+                target_ips, name, "status", timeout=timeout, minimal=use_minimal,
             )
             previous_values: dict = {}
             display_results, previous_values = _apply_monitor_change_highlights(results, previous_values)
@@ -730,7 +766,7 @@ def _execute_service_action(
                 while True:
                     _interruptible_sleep(2)
                     results, _ = _execute_service_targets_parallel(
-                        target_ips, name, "status", timeout=timeout,
+                        target_ips, name, "status", timeout=timeout, minimal=use_minimal,
                     )
                     display_results, previous_values = _apply_monitor_change_highlights(results, previous_values)
                     live.update(_build_status_table("Service Status (Monitoring)", display_results, minimal=use_minimal))
@@ -768,7 +804,7 @@ def _execute_service_action(
         try:
             if live_status_enabled:
                 results, failures = _execute_service_targets_parallel(
-                    target_ips, name, action, timeout=timeout,
+                    target_ips, name, action, timeout=timeout, minimal=use_minimal,
                 )
                 status_live.update(_build_status_table("Service Status", results, minimal=use_minimal))
             else:
@@ -779,6 +815,7 @@ def _execute_service_action(
                 ) as spin:
                     results, failures = _execute_service_targets_parallel(
                         target_ips, name, action, timeout=timeout, status_ctx=spin,
+                        minimal=use_minimal,
                     )
         finally:
             if status_live:
@@ -888,7 +925,7 @@ def _build_status_table(title: str, results: List[dict], minimal: bool = False):
         table.add_column("PID", style=t.col_pid)
         table.add_column("CPU", style=t.col_metric)
         table.add_column("RAM", style=t.col_metric)
-    table.add_column("Since", style=t.col_since)
+        table.add_column("Since", style=t.col_since)
     table.add_column("Status")
 
     sorted_results = _sort_results_by_server(results)
@@ -911,7 +948,6 @@ def _build_status_table(title: str, results: List[dict], minimal: bool = False):
             table.add_row(
                 server_label,
                 result["service"],
-                result.get("since", "N/A"),
                 status_text,
             )
         else:
@@ -997,7 +1033,7 @@ def manage_single_service(
         False, "--monitor", help="Continuously refresh status table (status action only)"
     ),
     minimal: bool = typer.Option(
-        False, "--minimal", help="Show only status and since columns in status output"
+        False, "--minimal", help="Show only status column in status output"
     ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
@@ -1073,7 +1109,7 @@ def manage_multiple_services(
         False, "--monitor", help="Continuously refresh status table (status action only)"
     ),
     minimal: bool = typer.Option(
-        False, "--minimal", help="Show only status and since columns in status output"
+        False, "--minimal", help="Show only status column in status output"
     ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
@@ -1212,7 +1248,7 @@ def manage_multiple_services(
             auth_done = True
 
         results, failures = _execute_service_targets_parallel(
-            target_ips, svc_name, action, timeout=timeout,
+            target_ips, svc_name, action, timeout=timeout, minimal=use_minimal,
         )
         all_results.extend(results)
         all_failures.extend(failures)
@@ -1259,7 +1295,7 @@ def manage_all_services(
         False, "--monitor", help="Continuously refresh status table (status action only)"
     ),
     minimal: bool = typer.Option(
-        False, "--minimal", help="Show only status and since columns in status output"
+        False, "--minimal", help="Show only status column in status output"
     ),
     on_failure: Optional[str] = typer.Option(
         None, "--on-failure", help="Behavior on partial failure: continue|stop|prompt"
@@ -1327,7 +1363,7 @@ def manage_all_services(
 
             _preflight_monitor_auth(target_ips)
             all_results, _ = _execute_all_services_parallel(
-                target_ips, "status", services_by_target, timeout=timeout,
+                target_ips, "status", services_by_target, timeout=timeout, minimal=use_minimal,
             )
             previous_values: dict = {}
             display_results, previous_values = _apply_monitor_change_highlights(all_results, previous_values)
@@ -1340,7 +1376,7 @@ def manage_all_services(
                 while True:
                     _interruptible_sleep(2)
                     all_results, _ = _execute_all_services_parallel(
-                        target_ips, "status", services_by_target, timeout=timeout,
+                        target_ips, "status", services_by_target, timeout=timeout, minimal=use_minimal,
                     )
                     display_results, previous_values = _apply_monitor_change_highlights(all_results, previous_values)
                     live.update(_build_status_table("All Services Status (Monitoring)", display_results, minimal=use_minimal))
@@ -1380,7 +1416,7 @@ def manage_all_services(
             services_by_target = _build_target_service_index(scope.servers)
             if live_status_enabled:
                 all_results, all_failures = _execute_all_services_parallel(
-                    target_ips, action, services_by_target, timeout=timeout,
+                    target_ips, action, services_by_target, timeout=timeout, minimal=use_minimal,
                 )
                 consolidated_status_live.update(
                     _build_status_table("All Services Status", all_results, minimal=use_minimal)
@@ -1395,7 +1431,7 @@ def manage_all_services(
                     spinner="dots",
                 ):
                     all_results, all_failures = _execute_all_services_parallel(
-                        target_ips, action, services_by_target, timeout=timeout,
+                        target_ips, action, services_by_target, timeout=timeout, minimal=use_minimal,
                     )
         finally:
             if consolidated_status_live:

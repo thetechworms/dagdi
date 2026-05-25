@@ -571,7 +571,7 @@ class TestBuildStatusTable:
         assert "RAM" not in col_names
         assert "Server" in col_names
         assert "Service" in col_names
-        assert "Since" in col_names
+        assert "Since" not in col_names
         assert "Status" in col_names
 
     def test_minimal_table_row_count_matches(self):
