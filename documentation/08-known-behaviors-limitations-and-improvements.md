@@ -4,10 +4,11 @@ This section records implementation-accurate behavior that operators and contrib
 
 ## Behavior Notes
 
-## 1) `global_settings` are validated but not fully enforced at runtime
+## 1) `global_settings` are per-product and carried through scope resolution
 
-- `global_settings.ssh_timeout` and `global_settings.on_partial_failure` are loaded and shown by `config show-settings`.
-- Command modules mostly rely on command options (`--timeout`) and internal defaults rather than auto-applying global settings.
+- Each product can have its own `global_settings`; a top-level `global_settings` serves as default for products that don't define their own.
+- `ResolvedScope` carries the resolved product's `global_settings`, so commands can read `live_status_table`, `minimal_status`, `log_buffer_size`, and `theme` directly from the scope.
+- `ssh_timeout` and `on_partial_failure` are loaded and shown by `config show-settings` but command modules still mostly rely on command options (`--timeout`) rather than auto-applying them.
 
 ## 2) `--on-failure` is accepted in several commands but policy control is minimal
 
@@ -15,10 +16,11 @@ This section records implementation-accurate behavior that operators and contrib
 - Most operational loops still aggregate failures and continue, then summarize.
 - No centralized strategy layer currently enforces `continue|stop|prompt` consistently across commands.
 
-## 3) Config merge requires one product per file set
+## 3) Config merge allows splitting a product across files
 
-- Splitting one product across multiple files (even for different environments/servers) fails with `MergeError`.
-- This is intentional in current merge logic.
+- The same product can appear in multiple files — environments from each file are merged together.
+- Duplicate environment names within the same product across files raise a `MergeError`.
+- If a product is split across files, at most one of those files may contain `global_settings`; otherwise a `MergeError` is raised.
 
 ## 4) Network metric values are cumulative snapshots
 
@@ -45,10 +47,11 @@ This section records implementation-accurate behavior that operators and contrib
 ## Behavior Note: Theme System
 
 - `global_settings.theme` is validated at config load time and fully enforced at runtime.
+- The theme is activated from the first product's `global_settings.theme` during config validation.
 - All CLI output colors are driven through `output/themes.py` semantic roles (`styled()`, `get_theme()`).
 - Available themes: `default`, `light`, `dark`, `no_color`.
 - Use `no_color` for terminals with ANSI rendering issues or CI pipelines.
-- Unlike other global settings, `theme` is immediately active after config validation — no separate runtime wiring needed.
+- Unlike `ssh_timeout`/`on_partial_failure`, `theme`, `live_status_table`, `minimal_status`, and `log_buffer_size` are immediately active via per-product settings on `ResolvedScope`.
 
 ## Suggested Improvement Backlog
 
@@ -59,4 +62,5 @@ This section records implementation-accurate behavior that operators and contrib
 5. Improve metrics with sampled interval network throughput.
 6. Add explicit JSON output mode for machine integrations.
 7. Add stricter validation for service-specific config keys (`log_command`).
+8. Support per-product theme selection when multiple products are loaded (currently uses first product's theme).
 

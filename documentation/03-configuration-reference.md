@@ -13,11 +13,13 @@ Files not matching this naming convention are ignored.
 
 ## Multi-File Configuration Rules
 
-You can have multiple config files, but with strict merge rules:
+You can have multiple config files with the following merge rules:
 
-- Each `product.name` must appear in **exactly one** file.
-- Defining the same product across files raises a `MergeError`.
-- `global_settings` from multiple files are merged by key; last value wins.
+- The same product **can** be split across multiple files — environments from each file are merged together.
+- Duplicate environment names within the same product across files raise a `MergeError`.
+- Global services (top-level `services:` section) must be unique across all files.
+- `global_settings` is associated with the products defined in the same file. If a product is split across files, at most one of them may contain `global_settings`; otherwise a `MergeError` is raised.
+- A top-level `global_settings` (outside any product) serves as the default for products that don't define their own.
 
 ## Complete Schema
 
@@ -75,12 +77,14 @@ the password in YAML. On a per-server `ssh` block it prompts once for that serve
 On shared `servers.ssh` it prompts once per environment and reuses the password
 for all servers inheriting that shared SSH config.
 
-global_settings:                            # optional
+global_settings:                            # optional (per-product or top-level default)
   ssh_timeout: <int_seconds>                # default: 30
   ssh_port: <int_port>                      # default: 22, range 1-65535
   on_partial_failure: <continue|stop|prompt># default: prompt
   live_status_table: <true|false>           # default: false
+  minimal_status: <true|false>              # default: false
   theme: <default|light|dark|no_color>      # default: default
+  log_buffer_size: <int>                    # default: 5000, range 100-100000
 ```
 
 ## Required vs Optional
@@ -208,22 +212,27 @@ Sudo behavior controls:
 
 ## Global Settings
 
-`global_settings` values are validated and attached to runtime config.
+`global_settings` can be defined per product or at the top level as a default. Per-product settings take precedence over the top-level default. The resolved product's settings are carried through `ResolvedScope` so commands can use them at runtime.
 
-Current implementation detail:
+`dagdi config show-settings` displays settings for each product individually.
 
-- `ssh_timeout`, `ssh_port`, `on_partial_failure`, `live_status_table`, and `theme` are visible via `dagdi config show-settings`
-- `live_status_table` controls whether `status` commands render incrementally as results arrive
-- `theme` controls CLI output colors. Available themes:
+Available settings:
+
+- `ssh_timeout` — default SSH timeout in seconds
+- `ssh_port` — default SSH port (1-65535)
+- `on_partial_failure` — failure policy: `continue`, `stop`, or `prompt`
+- `live_status_table` — render status tables incrementally as results arrive
+- `minimal_status` — show only status column in service status output (omits Type, PID, CPU, RAM, Since)
+- `theme` — CLI output color theme:
   - `default` — standard colors, works on most dark-background terminals
   - `light` — darker shades tuned for light-background terminals
   - `dark` — high-contrast bright colors for dark terminals
   - `no_color` — disables all color/styling (useful for terminals with ANSI issues or CI pipelines)
-- Some command implementations currently do not automatically apply global settings to runtime behavior unless explicit command options are passed
+- `log_buffer_size` — max lines kept per panel in split log view (range 100-100000, default 5000)
 
 ## Production-Friendly Config Tips
 
-- Keep one product per file to avoid merge errors.
+- You can split a product across multiple files (environments are merged), but keep `global_settings` in only one file per product.
 - Use unique server names per environment to reduce operator confusion.
 - Prefer key-based auth; avoid storing plaintext passwords in shared repos.
 - Define `container_name` explicitly for Docker services to prevent name mismatch.
@@ -258,5 +267,7 @@ global_settings:
   ssh_port: 22
   on_partial_failure: prompt
   live_status_table: true
+  minimal_status: false
   theme: default
+  log_buffer_size: 5000
 ```

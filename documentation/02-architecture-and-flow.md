@@ -25,6 +25,7 @@ Dagdi follows a clear layered structure:
 
 Global options accepted by root callback:
 
+- `--version` / `-V` (eager; prints version and exits)
 - `--timeout`
 - `--on-failure`
 
@@ -55,10 +56,11 @@ For most operational commands, the flow is:
 
 ### Merge (`config/merger.py`)
 
-- Merges all products and global settings
-- Enforces **one product definition per file set**:
-  - If two files define the same `product.name`, merge fails with `MergeError`
-- `global_settings` use "last one wins" update semantics
+- Merges products, services, and per-product global settings across files
+- The same product **can** be split across multiple files — environments from each file are merged together
+- Duplicate environment names within the same product across files raise a `MergeError`
+- Global services must still be unique across all files
+- `global_settings` is associated with the products defined in the same file. If a product is split across files, at most one of them may contain `global_settings`; otherwise a `MergeError` is raised
 
 ### Validate (`config/validator.py`)
 
@@ -71,11 +73,15 @@ For most operational commands, the flow is:
 - Applies defaults:
   - SSH username: `ubuntu`
   - SSH timeout: `30`
-  - Global settings:
+  - Per-product global settings (or top-level fallback):
     - `ssh_timeout=30`
     - `on_partial_failure=prompt`
+    - `live_status_table=false`
+    - `minimal_status=false`
     - `theme=default`
-- Activates the configured theme via `set_theme()`
+    - `log_buffer_size=5000`
+- Each product carries its own `GlobalSettings` instance; top-level `global_settings` acts as a default for products that don't define their own
+- Activates the configured theme via `set_theme()` (uses the first product's theme)
 
 ## Context Subsystem Flow
 
@@ -120,7 +126,7 @@ Rules:
 - Missing product/environment can be pulled from context
 - Product/environment existence is validated
 - Server/IP/service filters are validated
-- Returns `ResolvedScope` including `scope_type`
+- Returns `ResolvedScope` including `scope_type` and the resolved product's `global_settings`
 
 Supported scope types:
 
@@ -171,7 +177,7 @@ Supported scope types:
 - `styled()` helper that wraps text with the active theme's Rich markup for a given role
 - `set_theme()` / `get_theme()` for activating and reading the current theme
 
-The theme is activated during config validation based on `global_settings.theme`. All formatter functions and command output code use `get_theme()` and `styled()` instead of hardcoded color strings, making the entire CLI appearance configurable.
+The theme is activated during config validation based on the first product's `global_settings.theme`. All formatter functions and command output code use `get_theme()` and `styled()` instead of hardcoded color strings, making the entire CLI appearance configurable.
 
 All user-facing output is terminal-oriented and rich-formatted where applicable.
 

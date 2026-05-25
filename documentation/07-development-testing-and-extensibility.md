@@ -83,7 +83,7 @@ Tests are organized under `tests/unit/` and include coverage for:
 
 Examples of explicitly validated behavior:
 
-- Duplicate product names across config files are rejected
+- Products can be split across files; duplicate environment names within the same product are rejected
 - Context fallback works when flags are omitted
 - `--server` and `--ip` conflict is rejected
 - Docker/systemd command generation rules
@@ -140,10 +140,12 @@ The `theme` setting is a working example of this pattern: field in `GlobalSettin
 From `pyproject.toml`:
 
 - Project name: `dagdi-cli`
+- Version: dynamic, read from `dagdi.__version__` (stamped from git tag during CI release)
 - Python requirement: `>=3.9`
 - Script entrypoint: `dagdi = dagdi.cli:cli`
 - Main deps: `typer`, `paramiko`, `pyyaml`, `rich`
 - Dev deps: `pytest`, `pytest-cov`, `hypothesis`, `black`, `ruff`
+- `dagdi --version` / `dagdi -V` prints the current version
 
 ## Recommended Engineering Improvements
 

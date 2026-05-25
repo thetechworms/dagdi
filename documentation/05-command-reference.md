@@ -3,7 +3,7 @@
 ## Global CLI
 
 ```bash
-dagdi [--timeout <seconds>] [--on-failure <continue|stop|prompt>] <command>
+dagdi [--version] [--timeout <seconds>] [--on-failure <continue|stop|prompt>] <command>
 ```
 
 Registered top-level command groups/commands:
@@ -34,13 +34,15 @@ Creates `dagdi-template.yaml` in `~/.config/dagdi/` (or `DAGDI_CONFIG_DIR`) with
 
 ### `dagdi config show-settings`
 
-Prints current global settings:
+Prints global settings for each product:
 
 - `SSH Timeout`
 - `SSH Port`
 - `On Partial Failure`
 - `Live Status Table`
+- `Minimal Status`
 - `Theme`
+- `Log Buffer Size`
 
 ## Context Commands
 
@@ -145,6 +147,7 @@ Common options:
 - `--server`, `--ip`
 - `--timeout`
 - `--monitor` (status only; continuously refreshes the table until Ctrl+C)
+- `--minimal` (status only; shows only Server, Service, and Status columns)
 - `--on-failure` (accepted; currently not fully implemented in behavior control)
 
 Behavior details:
@@ -171,12 +174,14 @@ Equivalent to `dagdi manage service ...`.
 
 - Last argument is treated as action
 - All preceding args are service names
-- Runs each service operation sequentially
+- Destructive actions (`stop`, `restart`) show a single confirmation prompt for all services
+- Results are consolidated into one table (status) or one action-results table
 
 Validation:
 
 - Requires at least one service + one action
 - Rejects invalid action values
+- `--monitor` requires exactly one service name
 
 ### Shortcut: `dagdi mas <action>`
 
